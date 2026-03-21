@@ -155,7 +155,9 @@ class RealNetwork(NetworkInterface):
         self._ap = network.WLAN(network.AP_IF)
         self._ap.config(essid=ssid)
         if password:
-            self._ap.config(password=password)
+            self._ap.config(security=4, password=password)  # WPA2
+        else:
+            self._ap.config(security=0)  # Open (no password)
         self._ap.active(True)
 
     def stop_ap(self):
