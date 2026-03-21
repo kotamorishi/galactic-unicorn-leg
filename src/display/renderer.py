@@ -26,6 +26,7 @@ class DisplayRenderer:
         self._scroll_speed = "medium"
         self._color = (255, 255, 255)
         self._bg_color = (0, 0, 0)
+        self._has_bg = False
         self._border = False
         self._border_color = (80, 80, 80)
         self._font = "bitmap8"
@@ -64,6 +65,7 @@ class DisplayRenderer:
             bg.get("g", 0),
             bg.get("b", 0),
         )
+        self._has_bg = self._bg_color != (0, 0, 0)
         self._border = message_config.get("border", False)
         bc = message_config.get("border_color", {})
         if bc:
@@ -126,10 +128,14 @@ class DisplayRenderer:
         Call this at the interval returned by get_scroll_interval_ms().
         """
         if self._status_text:
-            self._clear_with_color(0, 0, 0)
+            self._display.clear()
             self._render_status()
         elif self._active:
-            self._clear_with_color(*self._bg_color)
+            if self._has_bg:
+                self._display.set_pen(*self._bg_color)
+                self._display.draw_rectangle(0, 0, self._display.WIDTH, self._display.HEIGHT)
+            else:
+                self._display.clear()
             if self._mode == "scroll":
                 self._render_scroll()
             else:
@@ -138,11 +144,6 @@ class DisplayRenderer:
             self._display.clear()
 
         self._display.update()
-
-    def _clear_with_color(self, r, g, b):
-        """Clear display by filling with a color. Single draw operation."""
-        self._display.set_pen(r, g, b)
-        self._display.draw_rectangle(0, 0, self._display.WIDTH, self._display.HEIGHT)
 
     def _render_status(self):
         """Render status text centered on display."""
