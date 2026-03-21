@@ -54,6 +54,7 @@ except ImportError:  # pragma: no cover
         traceback.print_exc()
 
 MUTED_SOCKET_ERRORS = [
+    5,  # EIO - I/O error (client disconnected, common on Pico W)
     32,  # Broken pipe
     54,  # Connection reset by peer
     104,  # Connection reset by peer
