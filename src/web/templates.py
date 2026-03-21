@@ -44,7 +44,8 @@ summary::-webkit-details-marker{display:none}summary::before{content:"\\25B6\\FE
 .clock{font-size:28px;font-weight:300;font-variant-numeric:tabular-nums;letter-spacing:1px}.clock-day{font-size:13px;color:#8e8e93;margin-left:6px;font-weight:400;letter-spacing:0}"""
 
 _JS_COMMON = """function api(m,u,d){return fetch(u,{method:m,headers:{'Content-Type':'application/json'},body:d?JSON.stringify(d):undefined}).then(function(r){return r.json()})}
-function toast(id,msg,err){var e=document.getElementById(id);if(!e)return;e.textContent=msg;e.className=err?'toast err':'toast';if(!err)setTimeout(function(){e.textContent=''},3000)}"""
+function toast(id,msg,err){var e=document.getElementById(id);if(!e)return;e.textContent=msg;e.className=err?'toast err':'toast';if(!err)setTimeout(function(){e.textContent=''},3000)}
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}"""
 
 
 def _head(title):
