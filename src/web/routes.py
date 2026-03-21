@@ -1,5 +1,6 @@
 """HTTP route definitions for the web UI and API."""
 
+import gc
 from config import config_manager
 from audio.presets import get_preset_list, get_preset
 from web.templates import render_main_page, render_settings_page, render_setup_page
@@ -22,6 +23,7 @@ def register(app):
     @app.route("/")
     async def main_page(req):
         try:
+            gc.collect()
             config = config_manager.load_app_config()
             presets = get_preset_list()
             scheduler = app.ctx["scheduler"]
