@@ -21,11 +21,15 @@ def register(app):
 
     @app.route("/")
     async def main_page(req):
-        config = config_manager.load_app_config()
-        presets = get_preset_list()
-        scheduler = app.ctx["scheduler"]
-        status = _get_display_status(scheduler, config)
-        return _html(render_main_page(config, presets, status))
+        try:
+            config = config_manager.load_app_config()
+            presets = get_preset_list()
+            scheduler = app.ctx["scheduler"]
+            status = _get_display_status(scheduler, config)
+            return _html(render_main_page(config, presets, status))
+        except Exception as e:
+            print("main_page error:", e)
+            return str(e), 500, {"Content-Type": "text/plain"}
 
     @app.route("/settings")
     async def settings_page(req):
