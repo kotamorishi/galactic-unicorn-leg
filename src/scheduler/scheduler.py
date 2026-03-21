@@ -157,6 +157,8 @@ class Scheduler:
                         if self._on_schedule_start:
                             self._on_schedule_start(sched)
 
+                break  # First matching schedule wins
+
         # Clean up old trigger records (keep only current minute)
         self._last_triggered_starts = {
             (sid, mk) for sid, mk in self._last_triggered_starts

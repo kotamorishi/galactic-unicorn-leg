@@ -149,6 +149,24 @@ def load_config(skip_display=False):
 
 # --- Scheduler callbacks ---
 
+# Cached message config to avoid reading flash every minute
+_cached_msg_config = None
+
+
+def _get_msg_config():
+    """Get message config, cached to avoid flash reads every scheduler tick."""
+    global _cached_msg_config
+    if _cached_msg_config is None:
+        _cached_msg_config = config_manager.load_app_config()["message"]
+    return _cached_msg_config
+
+
+def invalidate_msg_cache():
+    """Call when message config changes (from web API)."""
+    global _cached_msg_config
+    _cached_msg_config = None
+
+
 def on_schedule_active(schedule):
     """Called when a schedule is currently active."""
     # Schedule takes over — clear manual mode
@@ -156,8 +174,7 @@ def on_schedule_active(schedule):
     # Update message text from schedule if it has one
     msg_text = schedule.get("message", "")
     if msg_text and msg_text != renderer._text:
-        app_config = config_manager.load_app_config()
-        msg_cfg = dict(app_config["message"])
+        msg_cfg = dict(_get_msg_config())
         msg_cfg["text"] = msg_text
         renderer.configure(msg_cfg)
     renderer.set_active(True)
@@ -242,41 +259,41 @@ async def button_check_loop():
     Long press A+D together for 5 seconds: reset WiFi and reboot.
     """
     ad_press_start = 0
-    info_showing = False
+    info_expire = 0  # Non-blocking info display timeout
     while True:
         try:
+            now = _ticks_ms()
             a_pressed = buttons_hal.is_pressed("a")
             b_pressed = buttons_hal.is_pressed("b")
             d_pressed = buttons_hal.is_pressed("d")
 
-            # A+D long press → WiFi reset
+            # Clear info display when expired
+            if info_expire and _ticks_diff(now, info_expire) >= 0:
+                renderer.clear_status()
+                info_expire = 0
+
+            # A+D long press → WiFi reset (always checked, even during info display)
             if a_pressed and d_pressed:
                 if ad_press_start == 0:
-                    ad_press_start = _ticks_ms()
-                elif _ticks_diff(_ticks_ms(), ad_press_start) >= 5000:
+                    ad_press_start = now
+                elif _ticks_diff(now, ad_press_start) >= 5000:
                     config_manager.delete_wifi_config()
                     system_hal.reset()
             else:
                 ad_press_start = 0
 
-            # A only → show IP address
-            if a_pressed and not d_pressed and not b_pressed and not info_showing:
-                info_showing = True
+            # A only → show IP address (non-blocking)
+            if a_pressed and not d_pressed and not b_pressed and not info_expire:
                 ip = wifi_mgr.get_ip() or "No WiFi"
                 renderer.show_status(ip)
-                await asyncio.sleep(5)
-                renderer.clear_status()
-                info_showing = False
+                info_expire = now + 5000
 
-            # B only → show configured SSID
-            if b_pressed and not a_pressed and not d_pressed and not info_showing:
-                info_showing = True
+            # B only → show configured SSID (non-blocking)
+            if b_pressed and not a_pressed and not d_pressed and not info_expire:
                 wifi_cfg = config_manager.load_wifi_config()
                 ssid = wifi_cfg["ssid"] if wifi_cfg else "Not set"
                 renderer.show_status(ssid)
-                await asyncio.sleep(5)
-                renderer.clear_status()
-                info_showing = False
+                info_expire = now + 5000
 
         except Exception as e:
             print("button_check error:", e)
@@ -300,6 +317,7 @@ async def main():
         "scheduler": sched,
         "system_hal": system_hal,
         "ota_updater": ota if sta_connected else None,
+        "invalidate_msg_cache": invalidate_msg_cache,
     }
     app = create_app(app_context)
 
