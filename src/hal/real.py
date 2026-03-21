@@ -189,18 +189,28 @@ class RealNetwork(NetworkInterface):
 
     def scan_networks(self):
         import network
-        wlan = network.WLAN(network.STA_IF)
-        wlan.active(True)
-        results = wlan.scan()
-        networks = []
-        seen = set()
-        for r in results:
-            ssid = r[0].decode("utf-8") if isinstance(r[0], bytes) else r[0]
-            if ssid and ssid not in seen:
-                seen.add(ssid)
-                networks.append({"ssid": ssid, "rssi": r[3]})
-        networks.sort(key=lambda x: x["rssi"], reverse=True)
-        return networks
+        try:
+            wlan = network.WLAN(network.STA_IF)
+            was_active = wlan.active()
+            if not was_active:
+                wlan.active(True)
+            import time
+            time.sleep(2)  # Allow time for scan after activation
+            results = wlan.scan()
+            if not was_active:
+                wlan.active(False)
+            networks = []
+            seen = set()
+            for r in results:
+                ssid = r[0].decode("utf-8") if isinstance(r[0], bytes) else r[0]
+                if ssid and ssid not in seen:
+                    seen.add(ssid)
+                    networks.append({"ssid": ssid, "rssi": r[3]})
+            networks.sort(key=lambda x: x["rssi"], reverse=True)
+            return networks
+        except Exception as e:
+            print("scan_networks error:", e)
+            return []
 
     def sync_ntp(self):
         try:

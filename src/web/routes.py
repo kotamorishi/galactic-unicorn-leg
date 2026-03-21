@@ -36,7 +36,10 @@ def register(app):
 
     @app.route("/setup")
     async def setup_page(req):
-        networks = app.ctx["wifi_manager"].scan_networks()
+        try:
+            networks = app.ctx["wifi_manager"].scan_networks()
+        except Exception:
+            networks = []
         return _html(render_setup_page(networks))
 
     # --- Captive portal detection ---
