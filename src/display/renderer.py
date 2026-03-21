@@ -26,6 +26,8 @@ class DisplayRenderer:
         self._scroll_speed = "medium"
         self._color = (255, 255, 255)
         self._bg_color = (0, 0, 0)
+        self._border = False
+        self._border_color = (80, 80, 80)
         self._font = "bitmap8"
         self._scroll_x = 0
         self._text_width = 0
@@ -62,6 +64,21 @@ class DisplayRenderer:
             bg.get("g", 0),
             bg.get("b", 0),
         )
+        self._border = message_config.get("border", False)
+        bc = message_config.get("border_color", {})
+        if bc:
+            self._border_color = (
+                bc.get("r", 80),
+                bc.get("g", 80),
+                bc.get("b", 80),
+            )
+        else:
+            # Default: dim version of text color
+            self._border_color = (
+                self._color[0] // 3,
+                self._color[1] // 3,
+                self._color[2] // 3,
+            )
         # Calculate Y offset for vertical centering
         fh = FONT_HEIGHT.get(self._font, 8)
         self._y_offset = (self._display.HEIGHT - fh) // 2
@@ -144,8 +161,20 @@ class DisplayRenderer:
             self._display.set_font(self._font)
             self._font_set = True
 
+    def _draw_border(self):
+        """Draw 1px accent lines at top and bottom edges of the display."""
+        if not self._border:
+            return
+        self._display.set_pen(*self._border_color)
+        # Top line (row 0)
+        self._display.draw_line(0, 0, self._display.WIDTH - 1, 0)
+        # Bottom line (row 10)
+        self._display.draw_line(0, self._display.HEIGHT - 1,
+                                self._display.WIDTH - 1, self._display.HEIGHT - 1)
+
     def _render_scroll(self):
         """Render scrolling text, advancing 1px per frame."""
+        self._draw_border()
         self._ensure_font()
         self._display.set_pen(*self._color)
         self._display.draw_text(self._text, self._scroll_x, self._y_offset)
@@ -156,6 +185,7 @@ class DisplayRenderer:
 
     def _render_fixed(self):
         """Render fixed (non-scrolling) text, centered horizontally."""
+        self._draw_border()
         self._ensure_font()
         self._display.set_pen(*self._color)
         self._display.draw_text(self._text, self._fixed_x, self._y_offset)

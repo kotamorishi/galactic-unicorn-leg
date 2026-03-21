@@ -186,12 +186,15 @@ def _validate_message(msg):
     font = msg.get("font", "bitmap8")
     if font not in FONTS:
         font = "bitmap8"
+    border_color = msg.get("border_color")
     return {
         "text": text,
         "display_mode": mode,
         "scroll_speed": speed,
         "color": _validate_color(msg.get("color", {})),
         "bg_color": _validate_color(msg.get("bg_color", {"r": 0, "g": 0, "b": 0})),
+        "border": bool(msg.get("border", False)),
+        "border_color": _validate_color(border_color) if border_color else {},
         "font": font,
     }
 

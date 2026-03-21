@@ -188,3 +188,37 @@ class TestDisplayRenderer:
         r.render_frame()
         texts = [i for i in mock_display.framebuffer if i["type"] == "text"]
         assert texts[0]["y"] == 2  # (11 - 6) // 2
+
+    def test_border_draws_top_and_bottom_lines(self, mock_display):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "Hi", "display_mode": "fixed",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
+                     "scroll_speed": "medium", "border": True})
+        r.set_active(True)
+        r.render_frame()
+        lines = [i for i in mock_display.framebuffer if i["type"] == "line"]
+        assert len(lines) == 2
+        # Top line at y=0, bottom line at y=10
+        ys = sorted([l["y1"] for l in lines])
+        assert ys == [0, 10]
+
+    def test_no_border_by_default(self, mock_display):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "Hi", "display_mode": "fixed",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
+                     "scroll_speed": "medium"})
+        r.set_active(True)
+        r.render_frame()
+        lines = [i for i in mock_display.framebuffer if i["type"] == "line"]
+        assert len(lines) == 0
+
+    def test_border_color_defaults_to_dim_text_color(self, mock_display):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "Hi", "display_mode": "fixed",
+                     "color": {"r": 150, "g": 90, "b": 30}, "font": "bitmap8",
+                     "scroll_speed": "medium", "border": True})
+        # Default border color = text color // 3
+        assert r._border_color == (50, 30, 10)
