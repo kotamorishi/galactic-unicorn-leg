@@ -46,14 +46,15 @@ Copy all files from `src/` to the Pico W filesystem using [Thonny](https://thonn
 mpremote connect auto fs cp -r src/ :
 ```
 
-### 4. First boot — WiFi setup
+### 3. First boot — WiFi setup
 
-1. Power on the device
-2. Connect to the `GalacticUnicorn-Setup` WiFi network from your phone
-3. A captive portal will open — select your home WiFi and enter the password
-4. The device will save the credentials, connect, and sync the clock via NTP
+1. Power on the device — the LED will scroll setup instructions
+2. Connect to the `GalacticUnicorn-Setup` WiFi network (password: `unicorn1`)
+3. Open a browser and go to `http://192.168.4.1/setup`
+4. Select your home WiFi and enter the password
+5. The device will save the credentials, connect, and sync the clock via NTP
 
-### 5. Configure
+### 4. Configure
 
 Open a browser and go to the device's IP address (shown briefly on the LED display after connecting). From there you can:
 

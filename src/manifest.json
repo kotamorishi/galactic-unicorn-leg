@@ -18,6 +18,7 @@
     "scheduler/scheduler.py",
     "wifi/__init__.py",
     "wifi/manager.py",
+    "wifi/captive_dns.py",
     "web/__init__.py",
     "web/server.py",
     "web/routes.py",

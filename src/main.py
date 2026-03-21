@@ -61,6 +61,7 @@ from display.renderer import DisplayRenderer
 from audio.player import AudioPlayer
 from scheduler.scheduler import Scheduler
 from wifi.manager import WiFiManager
+from wifi.captive_dns import CaptiveDNS
 from ota.updater import OTAUpdater
 from web.server import create_app
 
@@ -74,6 +75,7 @@ player.init()
 
 sched = Scheduler(system_hal)
 wifi_mgr = WiFiManager(network_hal, system_hal)
+captive_dns = CaptiveDNS()
 ota = OTAUpdater(system_hal, renderer)
 
 # --- WiFi boot sequence ---
@@ -281,6 +283,9 @@ async def main():
         # If no schedules configured, keep display active by default
         if not config.get("schedules"):
             renderer.set_active(True)
+    else:
+        # AP mode: start captive DNS so phones auto-open the setup page
+        asyncio.create_task(captive_dns.run())
 
     # Start web server (this blocks the event loop — it must be last)
     await app.start_server(host="0.0.0.0", port=80)

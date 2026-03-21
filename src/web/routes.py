@@ -39,6 +39,30 @@ def register(app):
         networks = app.ctx["wifi_manager"].scan_networks()
         return _html(render_setup_page(networks))
 
+    # --- Captive portal detection ---
+    # iOS/macOS
+    @app.route("/hotspot-detect.html")
+    async def captive_apple(req):
+        return "", 302, {"Location": "http://192.168.4.1/setup"}
+
+    # Android
+    @app.route("/generate_204")
+    async def captive_android(req):
+        return "", 302, {"Location": "http://192.168.4.1/setup"}
+
+    @app.route("/gen_204")
+    async def captive_android2(req):
+        return "", 302, {"Location": "http://192.168.4.1/setup"}
+
+    # Windows
+    @app.route("/connecttest.txt")
+    async def captive_windows(req):
+        return "", 302, {"Location": "http://192.168.4.1/setup"}
+
+    @app.route("/redirect")
+    async def captive_windows2(req):
+        return "", 302, {"Location": "http://192.168.4.1/setup"}
+
     # --- API routes ---
 
     @app.route("/api/status", methods=["GET"])
