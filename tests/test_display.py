@@ -96,6 +96,7 @@ class TestDisplayRenderer:
         assert r._scroll_x == initial_x - 1
 
     def test_scroll_wraps_around(self, mock_display):
+        from display.renderer import SCROLL_GAP
         r = DisplayRenderer(mock_display)
         r.init()
         r.configure({"text": "Hi", "display_mode": "scroll",
@@ -104,8 +105,13 @@ class TestDisplayRenderer:
         r.set_active(True)
 
         text_width = mock_display.measure_text("Hi", 1)
-        # Move scroll position past the wrap point
+        # Should NOT wrap yet — still within gap
         r._scroll_x = -text_width - 1
+        r.render_frame()
+        assert r._scroll_x != mock_display.WIDTH  # gap not exhausted yet
+
+        # Should wrap after text_width + SCROLL_GAP
+        r._scroll_x = -(text_width + SCROLL_GAP) - 1
         r.render_frame()
         assert r._scroll_x == mock_display.WIDTH
 

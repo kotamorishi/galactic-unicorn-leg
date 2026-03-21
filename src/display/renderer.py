@@ -10,6 +10,9 @@ SCROLL_SPEED_MS = {
     "fast": 25,
 }
 
+# Gap in pixels between end of text and re-entry from right during scroll
+SCROLL_GAP = 20
+
 # Actual pixel height of each font (used for vertical centering)
 FONT_HEIGHT = {
     "bitmap6": 6,
@@ -32,6 +35,7 @@ class DisplayRenderer:
         self._font = "bitmap8"
         self._scroll_x = 0
         self._text_width = 0
+        self._scroll_cycle = 0
         self._fixed_x = 0
         self._y_offset = 1
         self._font_set = False
@@ -93,6 +97,8 @@ class DisplayRenderer:
         self._display.set_font(self._font)
         self._font_set = True
         self._text_width = self._display.measure_text(self._text, 1)
+        # Total scroll distance before wrap: text exits left + gap before re-entry
+        self._scroll_cycle = self._text_width + SCROLL_GAP
         # Cache fixed-mode X position
         x = (self._display.WIDTH - self._text_width) // 2
         self._fixed_x = x if x >= 0 else 0
@@ -191,7 +197,8 @@ class DisplayRenderer:
         self._display.draw_text(self._text, self._scroll_x, self._y_offset)
 
         self._scroll_x -= 1
-        if self._scroll_x < -self._text_width:
+        # Wrap after text has fully exited left + gap
+        if self._scroll_x < -self._scroll_cycle:
             self._scroll_x = self._display.WIDTH
 
     def _render_fixed(self):

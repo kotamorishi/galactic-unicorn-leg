@@ -8,3 +8,4 @@
 | 4 | Add optional 1px accent border lines (top/bottom) to visually fill 11px height around 8px text |
 | 5 | Use native clear() for black backgrounds instead of draw_rectangle; cache _has_bg flag to skip per-frame tuple comparison |
 | 6 | Skip set_pen when pen color unchanged — dirty flag tracks bg/border changes; black bg + no border = 0 set_pen calls per frame |
+| 7 | Tighter scroll loop: 20px gap between text end and re-entry instead of full 53px screen width — shorter blank time for short messages |
