@@ -37,11 +37,7 @@ Download the Pimoroni custom MicroPython firmware:
 2. Drag the `.uf2` file to the `RPI-RP2` drive that appears
 3. The device will reboot automatically
 
-### 2. Install microdot
-
-Replace `src/lib/microdot.py` with the real [microdot](https://github.com/miguelgrinberg/microdot) library. Download `microdot.py` from the microdot repository and place it in `src/lib/`.
-
-### 3. Deploy the code
+### 2. Deploy the code
 
 Copy all files from `src/` to the Pico W filesystem using [Thonny](https://thonny.org/) or [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html):
 
