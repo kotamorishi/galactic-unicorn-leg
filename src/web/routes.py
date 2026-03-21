@@ -45,7 +45,17 @@ def register(app):
     async def api_status(req):
         config = config_manager.load_app_config()
         scheduler = app.ctx["scheduler"]
-        return _json_response(_get_display_status(scheduler, config))
+        status = _get_display_status(scheduler, config)
+        # Add server time
+        try:
+            _, _, _, weekday, hour, minute, second = scheduler.get_current_time()
+            day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            status["time"] = "{:02d}:{:02d}:{:02d}".format(hour, minute, second)
+            status["day"] = day_names[weekday]
+        except Exception:
+            status["time"] = "--:--:--"
+            status["day"] = ""
+        return _json_response(status)
 
     @app.route("/api/message", methods=["GET"])
     async def api_get_message(req):

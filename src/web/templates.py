@@ -59,7 +59,9 @@ details[open]>summary::before{content:"\\25BC\\FE0E "}
 .toast{font-size:13px;color:#34c759;min-height:18px;margin-top:6px}
 .toast.err{color:#ff3b30}
 .footer{text-align:center;padding:16px 0 8px}
-.footer a{color:#8e8e93;font-size:13px;text-decoration:none}"""
+.footer a{color:#8e8e93;font-size:13px;text-decoration:none}
+.clock{font-size:28px;font-weight:300;font-variant-numeric:tabular-nums;letter-spacing:1px;color:#1c1c1e}
+.clock-day{font-size:13px;color:#8e8e93;margin-left:6px;font-weight:400;letter-spacing:0}"""
 
 _JS = """function api(m,u,d){return fetch(u,{method:m,headers:{'Content-Type':'application/json'},body:d?JSON.stringify(d):undefined}).then(function(r){return r.json()})}
 function toast(id,msg,err){var e=document.getElementById(id);if(!e)return;e.textContent=msg;e.className=err?'toast err':'toast';if(!err)setTimeout(function(){e.textContent=''},3000)}"""
@@ -79,15 +81,20 @@ def render_main_page(config, presets, status):
         color.get("r", 255), color.get("g", 255), color.get("b", 255))
 
     # Status section
+    time_str = status.get("time", "--:--:--")
+    day_str = status.get("day", "")
+    clock_html = '<div class="clock"><span id="clock-time">{time}</span><span class="clock-day" id="clock-day">{day}</span></div>'.format(
+        time=time_str, day=day_str)
+
     if status.get("active"):
-        status_html = '<div class="status-on">Displaying</div><div class="status-msg">{msg}</div><div class="status-sub">Until {end}</div>'.format(
-            msg=_esc(status.get("message", "")), end=status.get("active_end", ""))
+        status_html = '{clock}<div class="status-on" id="st-label">Displaying</div><div class="status-msg" id="st-msg">{msg}</div><div class="status-sub" id="st-sub">Until {end}</div>'.format(
+            clock=clock_html, msg=_esc(status.get("message", "")), end=status.get("active_end", ""))
     elif status.get("next_start"):
-        status_html = '<div class="status-off">Off</div><div class="status-msg">{msg}</div><div class="status-sub">Next: {day} {time}</div>'.format(
-            msg=_esc(status.get("message", "")), day=status.get("next_day", ""), time=status.get("next_start", ""))
+        status_html = '{clock}<div class="status-off" id="st-label">Off</div><div class="status-msg" id="st-msg">{msg}</div><div class="status-sub" id="st-sub">Next: {day} {time}</div>'.format(
+            clock=clock_html, msg=_esc(status.get("message", "")), day=status.get("next_day", ""), time=status.get("next_start", ""))
     else:
-        status_html = '<div class="status-off">Off</div><div class="status-msg">{msg}</div><div class="status-sub">No schedules set</div>'.format(
-            msg=_esc(status.get("message", "")))
+        status_html = '{clock}<div class="status-off" id="st-label">Off</div><div class="status-msg" id="st-msg">{msg}</div><div class="status-sub" id="st-sub">No schedules set</div>'.format(
+            clock=clock_html, msg=_esc(status.get("message", "")))
 
     # Schedule items
     sched_items = ""
@@ -227,6 +234,19 @@ function playSnd(btn){{
 }}
 function setBright(v){{document.getElementById('q-bright-v').textContent=v+'%';api('POST','/api/system/brightness',{{brightness:parseInt(v)}})}}
 function setVol(v){{document.getElementById('q-vol-v').textContent=v+'%';api('POST','/api/system/volume',{{volume:parseInt(v)}})}}
+(function pollStatus(){{
+ api('GET','/api/status').then(function(s){{
+  if(s.time)document.getElementById('clock-time').textContent=s.time;
+  if(s.day)document.getElementById('clock-day').textContent=s.day;
+  var lbl=document.getElementById('st-label');
+  var sub=document.getElementById('st-sub');
+  if(s.active){{lbl.textContent='Displaying';lbl.className='status-on';sub.textContent='Until '+s.active_end}}
+  else if(s.next_start){{lbl.textContent='Off';lbl.className='status-off';sub.textContent='Next: '+s.next_day+' '+s.next_start}}
+  else{{lbl.textContent='Off';lbl.className='status-off';sub.textContent='No schedules set'}}
+  document.getElementById('st-msg').textContent=s.message||'';
+ }}).catch(function(){{}});
+ setTimeout(pollStatus,1000);
+}})();
 </script>""".format(
         status=status_html,
         text=_esc(msg.get("text", "")),
