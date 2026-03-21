@@ -225,21 +225,37 @@ async def ota_check_loop():
 
 
 async def button_check_loop():
-    """Monitor physical buttons for AP mode reset.
+    """Monitor physical buttons.
 
-    Long press A+D together for 5 seconds → restart in AP mode.
+    Button A: show IP address on LED for 5 seconds.
+    Long press A+D together for 5 seconds: reset WiFi and reboot.
     """
-    press_start = 0
+    ad_press_start = 0
+    ip_showing = False
     while True:
         try:
-            if buttons_hal.is_pressed("a") and buttons_hal.is_pressed("d"):
-                if press_start == 0:
-                    press_start = _ticks_ms()
-                elif _ticks_diff(_ticks_ms(), press_start) >= 5000:
+            a_pressed = buttons_hal.is_pressed("a")
+            d_pressed = buttons_hal.is_pressed("d")
+
+            # A+D long press → WiFi reset
+            if a_pressed and d_pressed:
+                if ad_press_start == 0:
+                    ad_press_start = _ticks_ms()
+                elif _ticks_diff(_ticks_ms(), ad_press_start) >= 5000:
                     config_manager.delete_wifi_config()
                     system_hal.reset()
             else:
-                press_start = 0
+                ad_press_start = 0
+
+            # A only → show IP address
+            if a_pressed and not d_pressed and not ip_showing:
+                ip_showing = True
+                ip = wifi_mgr.get_ip() or "No WiFi"
+                renderer.show_status(ip)
+                await asyncio.sleep(5)
+                renderer.clear_status()
+                ip_showing = False
+
         except Exception as e:
             print("button_check error:", e)
         await asyncio.sleep_ms(200)
