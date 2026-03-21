@@ -4,6 +4,7 @@ import sys
 import os
 import json
 import datetime
+import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -95,7 +96,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(pages[path]().encode("utf-8"))
+            gen = pages[path]()
+            # Collect async generator chunks
+            async def collect():
+                parts = []
+                async for chunk in gen:
+                    parts.append(chunk)
+                return "".join(parts)
+            html = asyncio.run(collect())
+            self.wfile.write(html.encode("utf-8"))
         else:
             self.send_response(404)
             self.end_headers()

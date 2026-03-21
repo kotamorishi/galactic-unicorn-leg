@@ -11,8 +11,8 @@ def _json_response(data, status=200):
     return data, status, {"Content-Type": "application/json"}
 
 
-def _html(content):
-    return content, 200, {"Content-Type": "text/html"}
+def _html(generator):
+    return generator, 200, {"Content-Type": "text/html"}
 
 
 def register(app):
@@ -29,6 +29,7 @@ def register(app):
             scheduler = app.ctx["scheduler"]
             status = _get_display_status(scheduler, config)
             return _html(render_main_page(config, presets, status))
+
         except Exception as e:
             print("main_page error:", e)
             return str(e), 500, {"Content-Type": "text/plain"}
