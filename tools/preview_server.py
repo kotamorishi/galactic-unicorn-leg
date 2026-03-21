@@ -3,6 +3,7 @@
 import sys
 import os
 import json
+import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -34,6 +35,11 @@ FAKE_CONFIG = {
     ],
     "system": {"brightness": 65, "timezone_offset": 9},
 }
+
+def _now_time():
+    now = datetime.datetime.now()
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    return now.strftime("%H:%M:%S"), day_names[now.weekday()]
 
 FAKE_STATUS = {
     "active": True,
@@ -70,12 +76,20 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         presets = get_preset_list()
 
+        def _status_with_time(base):
+            s = dict(base)
+            s["time"], s["day"] = _now_time()
+            return s
+
         pages = {
-            "/": lambda: render_main_page(FAKE_CONFIG, presets, FAKE_STATUS),
-            "/off": lambda: render_main_page(FAKE_CONFIG, presets, FAKE_STATUS_OFF),
+            "/": lambda: render_main_page(FAKE_CONFIG, presets, _status_with_time(FAKE_STATUS)),
+            "/off": lambda: render_main_page(FAKE_CONFIG, presets, _status_with_time(FAKE_STATUS_OFF)),
             "/settings": lambda: render_settings_page(FAKE_WIFI, FAKE_VERSION, 145000),
             "/setup": lambda: render_setup_page(FAKE_NETWORKS),
         }
+
+        if self.do_GET_api(path):
+            return
 
         if path in pages:
             self.send_response(200)
@@ -86,6 +100,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
             self.wfile.write(b"Not Found")
+
+    def do_GET_api(self, path):
+        if path == "/api/status":
+            now = datetime.datetime.now()
+            day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            data = dict(FAKE_STATUS)
+            data["time"] = now.strftime("%H:%M:%S")
+            data["day"] = day_names[now.weekday()]
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+            return True
+        return False
 
     def do_POST(self):
         self.send_response(200)
