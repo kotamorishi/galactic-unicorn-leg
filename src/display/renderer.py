@@ -29,6 +29,7 @@ class DisplayRenderer:
         self._scroll_x = 0
         self._text_width = 0
         self._active = False
+        self._manual_active = False
         self._status_text = None
 
     def init(self, skip_hw_init=False):
@@ -59,8 +60,15 @@ class DisplayRenderer:
         self._display.set_font(self._font)
         self._text_width = self._display.measure_text(self._text, 1)
 
-    def set_active(self, active):
-        """Enable or disable display output."""
+    def set_active(self, active, manual=False):
+        """Enable or disable display output.
+
+        Args:
+            active: True to enable, False to disable
+            manual: True if triggered by user action (won't be overridden by scheduler)
+        """
+        if manual:
+            self._manual_active = active
         if active and not self._active:
             self._reset_scroll()
         self._active = active

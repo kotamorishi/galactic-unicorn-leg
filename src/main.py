@@ -151,6 +151,8 @@ def load_config(skip_display=False):
 
 def on_schedule_active(schedule):
     """Called when a schedule is currently active."""
+    # Schedule takes over — clear manual mode
+    renderer._manual_active = False
     # Update message text from schedule if it has one
     msg_text = schedule.get("message", "")
     if msg_text and msg_text != renderer._text:
@@ -174,8 +176,9 @@ def on_schedule_start(schedule):
 
 
 def on_no_schedule():
-    """Called when no schedule is active."""
-    renderer.set_active(False)
+    """Called when no schedule is active. Don't turn off if manually activated."""
+    if not renderer._manual_active:
+        renderer.set_active(False)
 
 
 sched.on_schedule_active(on_schedule_active)
