@@ -36,10 +36,12 @@ def register(app):
 
     @app.route("/settings")
     async def settings_page(req):
+        gc.collect()
         wifi_status = app.ctx["wifi_manager"].get_status()
+        config = config_manager.load_app_config()
         version = config_manager.load_version()
         free_mem = app.ctx["system_hal"].get_free_memory()
-        return _html(render_settings_page(wifi_status, version, free_mem))
+        return _html(render_settings_page(wifi_status, version, free_mem, config["system"]))
 
     @app.route("/setup")
     async def setup_page(req):
@@ -148,6 +150,18 @@ def register(app):
         saved = config_manager.save_app_config(config)
         app.ctx["display_renderer"]._display.set_brightness(brightness)
         return _json_response({"brightness": saved["system"]["brightness"]})
+
+    @app.route("/api/system/timezone", methods=["POST"])
+    async def api_set_timezone(req):
+        data = req.json
+        if data is None:
+            return _json_response({"error": "Invalid JSON"}, 400)
+        tz = data.get("timezone_offset", 9)
+        config = config_manager.load_app_config()
+        config["system"]["timezone_offset"] = tz
+        saved = config_manager.save_app_config(config)
+        app.ctx["scheduler"].set_timezone_offset(tz)
+        return _json_response({"timezone_offset": saved["system"]["timezone_offset"]})
 
     @app.route("/api/system/volume", methods=["POST"])
     async def api_set_volume(req):

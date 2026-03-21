@@ -144,7 +144,10 @@ function setVol(v){document.getElementById('q-vol-v').textContent=v+'%';api('POS
 </script></body></html>"""
 
 
-async def render_settings_page(wifi_status, version, free_mem):
+async def render_settings_page(wifi_status, version, free_mem, system_config=None):
+    if system_config is None:
+        system_config = {}
+    tz = system_config.get("timezone_offset", 9)
     yield _head("Device Settings")
     yield _CSS1
     yield _CSS2
@@ -161,6 +164,17 @@ async def render_settings_page(wifi_status, version, free_mem):
     yield '<div class="ir"><span class="ir-l">Version</span><span class="ir-v">{}</span></div>'.format(_esc(str(version.get("version", "unknown"))))
     yield '<div class="ir"><span class="ir-l">Free Memory</span><span class="ir-v">{} KB</span></div>'.format(free_mem // 1024 if free_mem else "-")
     yield '<div class="ir"><span class="ir-l">Time Sync</span><span class="ir-v">{}</span></div>'.format("Synced" if wifi_status.get("ntp_synced") else "Not synced")
+
+    # Timezone selector
+    tz_opts = ""
+    for h in range(-12, 15):
+        sign = "+" if h >= 0 else ""
+        sel = "selected" if h == tz else ""
+        tz_opts += '<option value="{}" {}>UTC{}{}</option>'.format(h, sel, sign, h)
+    yield '<label>Timezone</label><select id="sys-tz" onchange="setTz(this.value)">'
+    yield tz_opts
+    yield '</select>'
+
     yield '<div class="acts"><button class="btn bs bsm" onclick="checkOta()">Check for updates</button><button class="btn bs bsm" onclick="reboot()">Reboot</button></div><div id="sys-toast" class="toast"></div></div>'
     yield '<div class="footer"><a href="/">Back</a></div>'
 
@@ -170,6 +184,7 @@ function scanWifi(){{api('GET','/api/wifi/scan').then(function(nets){{var s=docu
 function togManual(){{document.getElementById('manual-row').style.display=document.getElementById('wifi-ssid').value===''?'block':'none'}}
 function connectWifi(){{var sel=document.getElementById('wifi-ssid');var m=document.getElementById('wifi-ssid-manual');var ssid=sel.value||(m?m.value:'');var pw=document.getElementById('wifi-pass').value;if(!ssid){{toast('wifi-toast','Enter a network name',1);return}}toast('wifi-toast','Saving...');api('POST','/api/wifi/connect',{{ssid:ssid,password:pw}}).then(function(r){{if(r.status=='saved')toast('wifi-toast','WiFi saved! Rebooting...');else toast('wifi-toast',r.error||'Failed',1)}}).catch(function(){{toast('wifi-toast','Failed',1)}})}}
 function checkOta(){{toast('sys-toast','Checking...');api('POST','/api/ota/check').then(function(r){{toast('sys-toast',r.status||r.error||'Done')}}).catch(function(){{toast('sys-toast','Failed',1)}})}}
+function setTz(v){{api('POST','/api/system/timezone',{{timezone_offset:parseInt(v)}}).then(function(){{toast('sys-toast','Timezone saved')}}).catch(function(){{toast('sys-toast','Failed',1)}})}}
 function reboot(){{if(confirm('Reboot device?'))api('POST','/api/system/reboot')}}""")
 
 
