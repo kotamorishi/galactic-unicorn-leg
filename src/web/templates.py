@@ -276,7 +276,11 @@ def render_settings_page(wifi_status, version, free_mem):
 <div class="ir"><span class="ir-l">Signal</span><span class="ir-v">{rssi} dBm</span></div>
 <details style="margin-top:8px"><summary>Change WiFi</summary>
 <label>Network</label>
-<select id="wifi-ssid"><option value="">Scanning...</option></select>
+<select id="wifi-ssid" onchange="togManual()"><option value="">Scanning...</option></select>
+<div id="manual-row" style="display:none">
+<label>Network name</label>
+<input type="text" id="wifi-ssid-manual" placeholder="SSID">
+</div>
 <label>Password</label>
 <input type="password" id="wifi-pass" placeholder="WiFi password">
 <div class="acts">
@@ -310,13 +314,19 @@ function scanWifi(){{
   var o=document.createElement('option');o.value='';o.textContent='Enter manually...';s.appendChild(o);
  }}).catch(function(){{}});
 }}
+function togManual(){{
+ var sel=document.getElementById('wifi-ssid');
+ document.getElementById('manual-row').style.display=sel.value===''?'block':'none';
+}}
 function connectWifi(){{
- var ssid=document.getElementById('wifi-ssid').value;
+ var sel=document.getElementById('wifi-ssid');
+ var manual=document.getElementById('wifi-ssid-manual');
+ var ssid=sel.value||(manual?manual.value:'');
  var pw=document.getElementById('wifi-pass').value;
- if(!ssid){{toast('wifi-toast','Select a network',1);return}}
- toast('wifi-toast','Connecting...');
+ if(!ssid){{toast('wifi-toast','Enter a network name',1);return}}
+ toast('wifi-toast','Saving...');
  api('POST','/api/wifi/connect',{{ssid:ssid,password:pw}}).then(function(r){{
-  if(r.ip)toast('wifi-toast','Connected! IP: '+r.ip);
+  if(r.status=='saved')toast('wifi-toast','WiFi saved! Rebooting...');
   else toast('wifi-toast',r.error||'Failed',1);
  }}).catch(function(){{toast('wifi-toast','Failed',1)}});
 }}
@@ -345,18 +355,28 @@ def render_setup_page(networks):
     body = """<div class="s">
 <p style="color:#8e8e93;margin-bottom:16px">Select your WiFi network to get started.</p>
 <label>Network</label>
-<select id="wifi-ssid">{options}<option value="">Enter manually...</option></select>
+<select id="wifi-ssid" onchange="togManual()">{options}<option value="">Enter manually...</option></select>
+<div id="manual-row" style="display:none">
+<label>Network name</label>
+<input type="text" id="wifi-ssid-manual" placeholder="SSID">
+</div>
 <label>Password</label>
 <input type="password" id="wifi-pass" placeholder="WiFi password">
 <div class="acts"><button class="btn bp" onclick="connectWifi()">Connect</button></div>
 <div id="wifi-toast" class="toast"></div>
 </div>
 <script>
+function togManual(){{
+ var sel=document.getElementById('wifi-ssid');
+ document.getElementById('manual-row').style.display=sel.value===''?'block':'none';
+}}
 function connectWifi(){{
- var ssid=document.getElementById('wifi-ssid').value;
+ var sel=document.getElementById('wifi-ssid');
+ var manual=document.getElementById('wifi-ssid-manual');
+ var ssid=sel.value||manual.value;
  var pw=document.getElementById('wifi-pass').value;
- if(!ssid){{toast('wifi-toast','Select a network',1);return}}
- toast('wifi-toast','Connecting...');
+ if(!ssid){{toast('wifi-toast','Enter a network name',1);return}}
+ toast('wifi-toast','Saving...');
  api('POST','/api/wifi/connect',{{ssid:ssid,password:pw}}).then(function(r){{
   if(r.status=='saved')toast('wifi-toast','WiFi saved! Rebooting device...');
   else toast('wifi-toast',r.error||'Failed',1);
