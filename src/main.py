@@ -133,11 +133,12 @@ def _start_ap_with_display():
     renderer.set_active(True)
 
 
-def load_config():
+def load_config(skip_display=False):
     """Load app config and configure components."""
     config = config_manager.load_app_config()
 
-    renderer.configure(config["message"])
+    if not skip_display:
+        renderer.configure(config["message"])
     display_hal.set_brightness(config["system"].get("brightness", 50))
 
     sched.set_schedules(config["schedules"])
@@ -267,7 +268,7 @@ async def main():
     """Main async entry point."""
     sta_connected = boot_wifi()
 
-    config = load_config()
+    config = load_config(skip_display=not sta_connected)
 
     # Create web app
     app_context = {
