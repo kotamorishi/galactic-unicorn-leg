@@ -3,7 +3,7 @@
 Only import this module on the actual Pico W device.
 """
 
-from galactic import GalacticUnicorn
+from galactic import GalacticUnicorn, Channel
 from picographics import PicoGraphics, DISPLAY_GALACTIC_UNICORN
 from hal.interfaces import (
     DisplayInterface, AudioInterface, NetworkInterface,
@@ -76,13 +76,13 @@ class RealAudio(AudioInterface):
                   attack, decay, sustain, release, duration_ms):
         ch = self._gu.synth_channel(channel)
         waveform_map = {
-            "square": GalacticUnicorn.WAVEFORM_SQUARE,
-            "sine": GalacticUnicorn.WAVEFORM_SINE,
-            "triangle": GalacticUnicorn.WAVEFORM_TRIANGLE,
-            "sawtooth": GalacticUnicorn.WAVEFORM_SAW,
-            "noise": GalacticUnicorn.WAVEFORM_NOISE,
+            "square": Channel.SQUARE,
+            "sine": Channel.SINE,
+            "triangle": Channel.TRIANGLE,
+            "sawtooth": Channel.SAW,
+            "noise": Channel.NOISE,
         }
-        wf = waveform_map.get(waveform, GalacticUnicorn.WAVEFORM_SQUARE)
+        wf = waveform_map.get(waveform, Channel.SQUARE)
         ch.configure(
             waveforms=wf,
             frequency=frequency,
