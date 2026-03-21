@@ -107,6 +107,7 @@ def register(app):
         config["message"] = data
         saved = config_manager.save_app_config(config)
         app.ctx["display_renderer"].configure(saved["message"])
+        app.ctx["display_renderer"].set_active(True)
         return _json_response(saved["message"])
 
     @app.route("/api/schedules", methods=["GET"])
