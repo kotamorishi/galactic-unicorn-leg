@@ -101,7 +101,7 @@ class WiFiManager:
             return True
         return False
 
-    def check_connection(self, current_ms):
+    def check_connection(self, current_ms, ticks_diff=None):
         """Periodic connection check. Call from main loop.
 
         Handles auto-reconnection with exponential backoff.
@@ -109,18 +109,22 @@ class WiFiManager:
 
         Args:
             current_ms: Current time in milliseconds (from time.ticks_ms or similar)
+            ticks_diff: Overflow-safe diff function (defaults to subtraction)
         """
+        if ticks_diff is None:
+            ticks_diff = lambda a, b: a - b
+
         if self._mode != "sta":
             return
 
         # Periodic NTP re-sync
         if self._ntp_synced and self._net.is_connected():
-            if current_ms - self._last_ntp_sync_ms >= NTP_SYNC_INTERVAL_S * 1000:
+            if ticks_diff(current_ms, self._last_ntp_sync_ms) >= NTP_SYNC_INTERVAL_S * 1000:
                 self.sync_ntp()
                 self._last_ntp_sync_ms = current_ms
 
         # Connection check
-        if current_ms - self._last_check_ms < CHECK_INTERVAL_S * 1000:
+        if ticks_diff(current_ms, self._last_check_ms) < CHECK_INTERVAL_S * 1000:
             return
         self._last_check_ms = current_ms
 

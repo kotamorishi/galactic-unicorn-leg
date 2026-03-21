@@ -64,7 +64,8 @@ details[open]>summary::before{content:"\\25BC\\FE0E "}
 .clock-day{font-size:13px;color:#8e8e93;margin-left:6px;font-weight:400;letter-spacing:0}"""
 
 _JS = """function api(m,u,d){return fetch(u,{method:m,headers:{'Content-Type':'application/json'},body:d?JSON.stringify(d):undefined}).then(function(r){return r.json()})}
-function toast(id,msg,err){var e=document.getElementById(id);if(!e)return;e.textContent=msg;e.className=err?'toast err':'toast';if(!err)setTimeout(function(){e.textContent=''},3000)}"""
+function toast(id,msg,err){var e=document.getElementById(id);if(!e)return;e.textContent=msg;e.className=err?'toast err':'toast';if(!err)setTimeout(function(){e.textContent=''},3000)}
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}"""
 
 
 def _page(title, body):
@@ -305,8 +306,8 @@ scanWifi();
 function scanWifi(){{
  api('GET','/api/wifi/scan').then(function(nets){{
   var s=document.getElementById('wifi-ssid');s.innerHTML='';
-  nets.forEach(function(n){{s.innerHTML+='<option value="'+n.ssid+'">'+n.ssid+' ('+n.rssi+' dBm)</option>'}});
-  s.innerHTML+='<option value="">Enter manually...</option>';
+  nets.forEach(function(n){{var o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+' ('+n.rssi+' dBm)';s.appendChild(o)}});
+  var o=document.createElement('option');o.value='';o.textContent='Enter manually...';s.appendChild(o);
  }}).catch(function(){{}});
 }}
 function connectWifi(){{

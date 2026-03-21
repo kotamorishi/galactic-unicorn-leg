@@ -74,7 +74,6 @@ class RealAudio(AudioInterface):
 
     def play_tone(self, channel, waveform, frequency, volume,
                   attack, decay, sustain, release, duration_ms):
-        import uasyncio as asyncio
         ch = self._gu.synth_channel(channel)
         waveform_map = {
             "square": GalacticUnicorn.WAVEFORM_SQUARE,

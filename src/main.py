@@ -20,6 +20,21 @@ except ImportError:
 
 import gc
 
+
+def _ticks_ms():
+    """Get current ticks in ms, compatible with CPython and MicroPython."""
+    if hasattr(time, "ticks_ms"):
+        return time.ticks_ms()
+    return int(time.time() * 1000)
+
+
+def _ticks_diff(end, start):
+    """Overflow-safe tick difference."""
+    if hasattr(time, "ticks_diff"):
+        return time.ticks_diff(end, start)
+    return end - start
+
+
 # --- Hardware initialization ---
 # GalacticUnicorn must be initialized before WiFi (known constraint)
 
@@ -52,7 +67,7 @@ from web.server import create_app
 # --- Component setup ---
 
 renderer = DisplayRenderer(display_hal)
-renderer.init()
+# display_hal.init() already called above — don't call renderer.init() to avoid double init
 
 player = AudioPlayer(audio_hal)
 player.init()
@@ -140,7 +155,10 @@ sched.on_no_schedule(on_no_schedule)
 async def display_loop():
     """Continuously render display frames."""
     while True:
-        renderer.render_frame()
+        try:
+            renderer.render_frame()
+        except Exception as e:
+            print("display_loop error:", e)
         interval = renderer.get_scroll_interval_ms()
         await asyncio.sleep_ms(interval)
 
@@ -150,8 +168,8 @@ async def scheduler_loop():
     while True:
         try:
             sched.check()
-        except Exception:
-            pass
+        except Exception as e:
+            print("scheduler_loop error:", e)
         await asyncio.sleep(60)
 
 
@@ -159,10 +177,9 @@ async def wifi_monitor_loop():
     """Monitor WiFi connection and handle reconnection."""
     while True:
         try:
-            current_ms = time.ticks_ms() if hasattr(time, "ticks_ms") else int(time.time() * 1000)
-            wifi_mgr.check_connection(current_ms)
-        except Exception:
-            pass
+            wifi_mgr.check_connection(_ticks_ms(), _ticks_diff)
+        except Exception as e:
+            print("wifi_monitor error:", e)
         await asyncio.sleep(30)
 
 
@@ -176,8 +193,8 @@ async def ota_check_loop():
                 result = await ota.check_and_update()
                 if result.get("reboot_required"):
                     system_hal.reset()
-        except Exception:
-            pass
+        except Exception as e:
+            print("ota_check error:", e)
         # Check every 30 minutes (will only trigger at check_hour)
         await asyncio.sleep(1800)
 
@@ -189,18 +206,17 @@ async def button_check_loop():
     """
     press_start = 0
     while True:
-        if buttons_hal.is_pressed("a") and buttons_hal.is_pressed("d"):
-            if press_start == 0:
-                press_start = time.ticks_ms() if hasattr(time, "ticks_ms") else int(time.time() * 1000)
-            else:
-                current = time.ticks_ms() if hasattr(time, "ticks_ms") else int(time.time() * 1000)
-                elapsed = current - press_start
-                if elapsed >= 5000:
-                    # Reset WiFi config and reboot into AP mode
+        try:
+            if buttons_hal.is_pressed("a") and buttons_hal.is_pressed("d"):
+                if press_start == 0:
+                    press_start = _ticks_ms()
+                elif _ticks_diff(_ticks_ms(), press_start) >= 5000:
                     config_manager.delete_wifi_config()
                     system_hal.reset()
-        else:
-            press_start = 0
+            else:
+                press_start = 0
+        except Exception as e:
+            print("button_check error:", e)
         await asyncio.sleep_ms(200)
 
 

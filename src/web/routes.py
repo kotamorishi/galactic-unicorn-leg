@@ -152,7 +152,16 @@ def register(app):
 
     @app.route("/api/system/reboot", methods=["POST"])
     async def api_reboot(req):
-        app.ctx["system_hal"].reset()
+        try:
+            import uasyncio as _asyncio
+        except ImportError:
+            import asyncio as _asyncio
+
+        async def _deferred_reboot():
+            await _asyncio.sleep(1)
+            app.ctx["system_hal"].reset()
+
+        _asyncio.create_task(_deferred_reboot())
         return _json_response({"status": "rebooting"})
 
 

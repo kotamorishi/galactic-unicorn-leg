@@ -164,15 +164,18 @@ class OTAUpdater:
             path=app_path,
         )
 
+        resp = None
         try:
             resp = requests.get(url)
             if resp.status_code != 200:
                 return None
             data = resp.json()
-            resp.close()
             return data
         except Exception:
             return None
+        finally:
+            if resp:
+                resp.close()
 
     def _update_file(self, file_path):
         """Download a single file from GitHub and write to local storage.
@@ -191,13 +194,13 @@ class OTAUpdater:
             file=file_path,
         )
 
+        resp = None
         try:
             resp = requests.get(url)
             if resp.status_code != 200:
                 return False
 
             content = resp.text
-            resp.close()
 
             if not content or len(content) == 0:
                 return False
@@ -223,6 +226,9 @@ class OTAUpdater:
 
         except Exception:
             return False
+        finally:
+            if resp:
+                resp.close()
 
     def should_check_now(self, current_hour):
         """Return True if it's time for the daily OTA check."""
