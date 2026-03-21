@@ -178,14 +178,17 @@ async def render_settings_page(wifi_status, version, free_mem, system_config=Non
     yield '<div class="acts"><button class="btn bs bsm" onclick="checkOta()">Check for updates</button><button class="btn bs bsm" onclick="reboot()">Reboot</button></div><div id="sys-toast" class="toast"></div></div>'
     yield '<div class="footer"><a href="/">Back</a></div>'
 
-    yield _foot("""
+    yield '<script>' + _JS_COMMON
+    yield """
 scanWifi();
-function scanWifi(){{api('GET','/api/wifi/scan').then(function(nets){{var s=document.getElementById('wifi-ssid');s.innerHTML='';nets.forEach(function(n){{var o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+' ('+n.rssi+' dBm)';s.appendChild(o)}});var o=document.createElement('option');o.value='';o.textContent='Enter manually...';s.appendChild(o)}}).catch(function(){{}})}}
-function togManual(){{document.getElementById('manual-row').style.display=document.getElementById('wifi-ssid').value===''?'block':'none'}}
-function connectWifi(){{var sel=document.getElementById('wifi-ssid');var m=document.getElementById('wifi-ssid-manual');var ssid=sel.value||(m?m.value:'');var pw=document.getElementById('wifi-pass').value;if(!ssid){{toast('wifi-toast','Enter a network name',1);return}}toast('wifi-toast','Saving...');api('POST','/api/wifi/connect',{{ssid:ssid,password:pw}}).then(function(r){{if(r.status=='saved')toast('wifi-toast','WiFi saved! Rebooting...');else toast('wifi-toast',r.error||'Failed',1)}}).catch(function(){{toast('wifi-toast','Failed',1)}})}}
-function checkOta(){{toast('sys-toast','Checking...');api('POST','/api/ota/check').then(function(r){{toast('sys-toast',r.status||r.error||'Done')}}).catch(function(){{toast('sys-toast','Failed',1)}})}}
-function setTz(v){{api('POST','/api/system/timezone',{{timezone_offset:parseInt(v)}}).then(function(){{toast('sys-toast','Timezone saved')}}).catch(function(){{toast('sys-toast','Failed',1)}})}}
-function reboot(){{if(confirm('Reboot device?'))api('POST','/api/system/reboot')}}""")
+function scanWifi(){api('GET','/api/wifi/scan').then(function(nets){var s=document.getElementById('wifi-ssid');s.innerHTML='';nets.forEach(function(n){var o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+' ('+n.rssi+' dBm)';s.appendChild(o)});var o=document.createElement('option');o.value='';o.textContent='Enter manually...';s.appendChild(o)}).catch(function(){})}
+function togManual(){document.getElementById('manual-row').style.display=document.getElementById('wifi-ssid').value===''?'block':'none'}"""
+    yield """
+function connectWifi(){var sel=document.getElementById('wifi-ssid');var m=document.getElementById('wifi-ssid-manual');var ssid=sel.value||(m?m.value:'');var pw=document.getElementById('wifi-pass').value;if(!ssid){toast('wifi-toast','Enter a network name',1);return}toast('wifi-toast','Saving...');api('POST','/api/wifi/connect',{ssid:ssid,password:pw}).then(function(r){if(r.status=='saved')toast('wifi-toast','WiFi saved! Rebooting...');else toast('wifi-toast',r.error||'Failed',1)}).catch(function(){toast('wifi-toast','Failed',1)})}
+function checkOta(){toast('sys-toast','Checking...');api('POST','/api/ota/check').then(function(r){toast('sys-toast',r.status||r.error||'Done')}).catch(function(){toast('sys-toast','Failed',1)})}
+function setTz(v){api('POST','/api/system/timezone',{timezone_offset:parseInt(v)}).then(function(){toast('sys-toast','Timezone saved')}).catch(function(){toast('sys-toast','Failed',1)})}
+function reboot(){if(confirm('Reboot device?'))api('POST','/api/system/reboot')}
+</script></body></html>"""
 
 
 async def render_setup_page(networks):
@@ -197,9 +200,11 @@ async def render_setup_page(networks):
     for n in networks:
         yield '<option value="{}">{} ({} dBm)</option>'.format(_esc(n["ssid"]), _esc(n["ssid"]), n["rssi"])
     yield '<option value="">Enter manually...</option></select><div id="manual-row" style="display:none"><label>Network name</label><input type="text" id="wifi-ssid-manual" placeholder="SSID"></div><label>Password</label><input type="password" id="wifi-pass" placeholder="WiFi password"><div class="acts"><button class="btn bp" onclick="connectWifi()">Connect</button></div><div id="wifi-toast" class="toast"></div></div>'
-    yield _foot("""
-function togManual(){{document.getElementById('manual-row').style.display=document.getElementById('wifi-ssid').value===''?'block':'none'}}
-function connectWifi(){{var sel=document.getElementById('wifi-ssid');var m=document.getElementById('wifi-ssid-manual');var ssid=sel.value||(m?m.value:'');var pw=document.getElementById('wifi-pass').value;if(!ssid){{toast('wifi-toast','Enter a network name',1);return}}toast('wifi-toast','Saving...');api('POST','/api/wifi/connect',{{ssid:ssid,password:pw}}).then(function(r){{if(r.status=='saved')toast('wifi-toast','WiFi saved! Rebooting...');else toast('wifi-toast',r.error||'Failed',1)}}).catch(function(){{toast('wifi-toast','Failed',1)}})}}""")
+    yield '<script>' + _JS_COMMON
+    yield """
+function togManual(){document.getElementById('manual-row').style.display=document.getElementById('wifi-ssid').value===''?'block':'none'}
+function connectWifi(){var sel=document.getElementById('wifi-ssid');var m=document.getElementById('wifi-ssid-manual');var ssid=sel.value||(m?m.value:'');var pw=document.getElementById('wifi-pass').value;if(!ssid){toast('wifi-toast','Enter a network name',1);return}toast('wifi-toast','Saving...');api('POST','/api/wifi/connect',{ssid:ssid,password:pw}).then(function(r){if(r.status=='saved')toast('wifi-toast','WiFi saved! Rebooting...');else toast('wifi-toast',r.error||'Failed',1)}).catch(function(){toast('wifi-toast','Failed',1)})}
+</script></body></html>""""")
 
 
 def _esc(s):
