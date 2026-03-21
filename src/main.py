@@ -122,7 +122,7 @@ def _start_ap_with_display():
     ap_ip = wifi_mgr.get_ap_ip() or "192.168.4.1"
     # Configure renderer to scroll AP setup instructions
     renderer.configure({
-        "text": "Connect to WiFi: GalacticUnicorn-Setup  Open: http://{ip}".format(ip=ap_ip),
+        "text": "WiFi: GalacticUnicorn-Setup  Pass: unicorn1  Open: http://{ip}".format(ip=ap_ip),
         "display_mode": "scroll",
         "scroll_speed": "slow",
         "color": {"r": 0, "g": 200, "b": 255},

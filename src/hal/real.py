@@ -153,12 +153,10 @@ class RealNetwork(NetworkInterface):
     def start_ap(self, ssid, password=None):
         import network
         self._ap = network.WLAN(network.AP_IF)
-        self._ap.config(essid=ssid)
-        if password:
-            self._ap.config(security=4, password=password)  # WPA2
-        else:
-            self._ap.config(security=0)  # Open (no password)
         self._ap.active(True)
+        # Pico W requires password (min 8 chars) for stable AP
+        ap_pass = password if password else "unicorn1"
+        self._ap.config(essid=ssid, password=ap_pass)
 
     def stop_ap(self):
         if self._ap:
