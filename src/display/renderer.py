@@ -40,6 +40,7 @@ class DisplayRenderer:
         self._y_offset = 1
         self._font_set = False
         self._pen_dirty = True
+        self._frame_dirty = True
         self._active = False
         self._manual_active = False
         self._status_text = None
@@ -89,6 +90,7 @@ class DisplayRenderer:
         # Calculate Y offset for vertical centering
         fh = FONT_HEIGHT.get(self._font, 8)
         self._y_offset = (self._display.HEIGHT - fh) // 2
+        self._frame_dirty = True
         self._reset_scroll()
 
     def _reset_scroll(self):
@@ -112,17 +114,21 @@ class DisplayRenderer:
         """
         if manual:
             self._manual_active = active
-        if active and not self._active:
-            self._reset_scroll()
+        if active != self._active:
+            self._frame_dirty = True
+            if active:
+                self._reset_scroll()
         self._active = active
 
     def show_status(self, text):
         """Show a temporary status message (e.g., 'Updating...')."""
         self._status_text = text
+        self._frame_dirty = True
 
     def clear_status(self):
         """Clear status message and return to normal display."""
         self._status_text = None
+        self._frame_dirty = True
 
     def get_scroll_interval_ms(self):
         """Return the scroll update interval in ms."""
@@ -132,27 +138,37 @@ class DisplayRenderer:
         """Render one frame to the display.
 
         For scroll mode, advances the scroll position by 1 pixel.
+        For fixed/status/inactive modes, skips redraw if nothing changed.
         Call this at the interval returned by get_scroll_interval_ms().
         """
         if self._status_text:
+            if not self._frame_dirty:
+                return
             self._display.clear()
             self._pen_dirty = True
             self._render_status()
+            self._frame_dirty = False
         elif self._active:
+            # Scroll mode must redraw every frame; fixed mode only when dirty
+            if self._mode == "fixed" and not self._frame_dirty:
+                return
             if self._has_bg:
                 self._display.set_pen(*self._bg_color)
                 self._display.draw_rectangle(0, 0, self._display.WIDTH, self._display.HEIGHT)
                 self._pen_dirty = True
             else:
                 self._display.clear()
-                # clear() doesn't change pen state; pen stays as text color if set
             if self._mode == "scroll":
                 self._render_scroll()
             else:
                 self._render_fixed()
+                self._frame_dirty = False
         else:
+            if not self._frame_dirty:
+                return
             self._display.clear()
             self._pen_dirty = True
+            self._frame_dirty = False
 
         self._display.update()
 

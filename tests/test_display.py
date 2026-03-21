@@ -228,3 +228,39 @@ class TestDisplayRenderer:
                      "scroll_speed": "medium", "border": True})
         # Default border color = text color // 3
         assert r._border_color == (50, 30, 10)
+
+    def test_fixed_mode_skips_redundant_update(self, mock_display):
+        """Fixed mode should only call update() once, then skip until dirty."""
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "Hi", "display_mode": "fixed",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
+                     "scroll_speed": "medium"})
+        r.set_active(True)
+        r.render_frame()
+        count_after_first = mock_display.update_count
+
+        r.render_frame()
+        r.render_frame()
+        # No additional updates — frame_dirty is False
+        assert mock_display.update_count == count_after_first
+
+        # After configure, frame becomes dirty again
+        r.configure({"text": "New", "display_mode": "fixed",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
+                     "scroll_speed": "medium"})
+        r.render_frame()
+        assert mock_display.update_count == count_after_first + 1
+
+    def test_scroll_mode_updates_every_frame(self, mock_display):
+        """Scroll mode must call update() on every frame."""
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "Hello", "display_mode": "scroll",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
+                     "scroll_speed": "medium"})
+        r.set_active(True)
+        r.render_frame()
+        r.render_frame()
+        r.render_frame()
+        assert mock_display.update_count == 3
