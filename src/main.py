@@ -151,6 +151,13 @@ def load_config(skip_display=False):
 
 def on_schedule_active(schedule):
     """Called when a schedule is currently active."""
+    # Update message text from schedule if it has one
+    msg_text = schedule.get("message", "")
+    if msg_text and msg_text != renderer._text:
+        app_config = config_manager.load_app_config()
+        msg_cfg = dict(app_config["message"])
+        msg_cfg["text"] = msg_text
+        renderer.configure(msg_cfg)
     renderer.set_active(True)
 
 

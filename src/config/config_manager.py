@@ -121,12 +121,16 @@ def _validate_color(color):
 
 def _validate_schedule(sched):
     """Validate and sanitize a single schedule entry."""
+    text = str(sched.get("message", ""))
+    if len(text) > 128:
+        text = text[:128]
     validated = {
         "id": int(sched.get("id", 0)),
         "enabled": bool(sched.get("enabled", True)),
         "start_time": _validate_time_str(sched.get("start_time", "00:00")),
         "end_time": _validate_time_str(sched.get("end_time", "23:59")),
         "days": _validate_days(sched.get("days", list(DAYS))),
+        "message": text,
         "sound": _validate_sound(sched.get("sound", {})),
     }
     return validated

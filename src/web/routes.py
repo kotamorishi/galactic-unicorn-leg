@@ -241,6 +241,8 @@ def _get_display_status(scheduler, config):
     next_start = None
     next_day = None
 
+    active_message = config["message"]["text"]
+
     for s in config.get("schedules", []):
         if not s.get("enabled"):
             continue
@@ -248,6 +250,8 @@ def _get_display_status(scheduler, config):
             if is_time_in_range(hour, minute, s["start_time"], s["end_time"]):
                 active = True
                 active_end = s["end_time"]
+                if s.get("message"):
+                    active_message = s["message"]
                 break
 
     if not active:
@@ -277,7 +281,7 @@ def _get_display_status(scheduler, config):
 
     return {
         "active": active,
-        "message": config["message"]["text"],
+        "message": active_message if active else config["message"]["text"],
         "active_end": active_end,
         "next_start": next_start,
         "next_day": next_day,
