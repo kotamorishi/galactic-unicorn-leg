@@ -162,10 +162,23 @@ def register(app):
         password = data.get("password", "")
         if not ssid:
             return _json_response({"error": "SSID required"}, 400)
-        success = app.ctx["wifi_manager"].try_connect_and_save(ssid, password)
-        if success:
-            return _json_response({"status": "connected", "ip": app.ctx["wifi_manager"].get_ip()})
-        return _json_response({"error": "Connection failed"}, 400)
+
+        # Save credentials first, then reboot into STA mode
+        # (Pico W can't reliably do AP→STA switch without reboot)
+        from config import config_manager as cm
+        cm.save_wifi_config(ssid, password)
+
+        try:
+            import uasyncio as _asyncio
+        except ImportError:
+            import asyncio as _asyncio
+
+        async def _deferred_reboot():
+            await _asyncio.sleep(2)
+            app.ctx["system_hal"].reset()
+
+        _asyncio.create_task(_deferred_reboot())
+        return _json_response({"status": "saved", "message": "WiFi saved. Rebooting..."})
 
     @app.route("/api/ota/check", methods=["POST"])
     async def api_ota_check(req):

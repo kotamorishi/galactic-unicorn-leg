@@ -358,7 +358,7 @@ function connectWifi(){{
  if(!ssid){{toast('wifi-toast','Select a network',1);return}}
  toast('wifi-toast','Connecting...');
  api('POST','/api/wifi/connect',{{ssid:ssid,password:pw}}).then(function(r){{
-  if(r.ip)toast('wifi-toast','Connected! IP: '+r.ip+'. Rebooting...');
+  if(r.status=='saved')toast('wifi-toast','WiFi saved! Rebooting device...');
   else toast('wifi-toast',r.error||'Failed',1);
  }}).catch(function(){{toast('wifi-toast','Failed',1)}});
 }}
