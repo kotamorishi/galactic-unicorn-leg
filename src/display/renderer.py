@@ -25,6 +25,7 @@ class DisplayRenderer:
         self._mode = "scroll"
         self._scroll_speed = "medium"
         self._color = (255, 255, 255)
+        self._bg_color = (0, 0, 0)
         self._font = "bitmap8"
         self._scroll_x = 0
         self._text_width = 0
@@ -52,6 +53,12 @@ class DisplayRenderer:
             color.get("b", 255),
         )
         self._font = message_config.get("font", "bitmap8")
+        bg = message_config.get("bg_color", {})
+        self._bg_color = (
+            bg.get("r", 0),
+            bg.get("g", 0),
+            bg.get("b", 0),
+        )
         self._reset_scroll()
 
     def _reset_scroll(self):
@@ -113,8 +120,15 @@ class DisplayRenderer:
         y = FONT_Y_OFFSET.get("bitmap6", 3)
         self._display.draw_text(self._status_text, x, y)
 
+    def _fill_bg(self):
+        """Fill display with background color."""
+        if self._bg_color != (0, 0, 0):
+            self._display.set_pen(*self._bg_color)
+            self._display.draw_rectangle(0, 0, self._display.WIDTH, self._display.HEIGHT)
+
     def _render_scroll(self):
         """Render scrolling text, advancing 1px per frame."""
+        self._fill_bg()
         self._display.set_font(self._font)
         self._display.set_pen(*self._color)
         y = FONT_Y_OFFSET.get(self._font, 2)
@@ -127,6 +141,7 @@ class DisplayRenderer:
 
     def _render_fixed(self):
         """Render fixed (non-scrolling) text, centered horizontally."""
+        self._fill_bg()
         self._display.set_font(self._font)
         self._display.set_pen(*self._color)
         y = FONT_Y_OFFSET.get(self._font, 2)

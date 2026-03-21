@@ -14,13 +14,48 @@ class TestDisplayRenderer:
             "display_mode": "scroll",
             "scroll_speed": "fast",
             "color": {"r": 255, "g": 0, "b": 0},
+            "bg_color": {"r": 0, "g": 0, "b": 50},
             "font": "bitmap6",
         })
         assert r._text == "Hello"
         assert r._mode == "scroll"
         assert r._scroll_speed == "fast"
         assert r._color == (255, 0, 0)
+        assert r._bg_color == (0, 0, 50)
         assert r._font == "bitmap6"
+
+    def test_bg_color_default_black(self, mock_display):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({
+            "text": "Test",
+            "display_mode": "fixed",
+            "scroll_speed": "medium",
+            "color": {"r": 255, "g": 255, "b": 255},
+            "font": "bitmap8",
+        })
+        assert r._bg_color == (0, 0, 0)
+
+    def test_bg_color_renders_as_rectangle(self, mock_display):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({
+            "text": "Hi",
+            "display_mode": "fixed",
+            "scroll_speed": "medium",
+            "color": {"r": 255, "g": 255, "b": 255},
+            "bg_color": {"r": 10, "g": 20, "b": 30},
+            "font": "bitmap8",
+        })
+        r.set_active(True)
+        r.render_frame()
+        # Background should be drawn as a full-screen rectangle
+        rects = [i for i in mock_display.framebuffer if i["type"] == "rectangle"]
+        assert len(rects) >= 1
+        bg = rects[0]
+        assert bg["w"] == 53
+        assert bg["h"] == 11
+        assert bg["color"] == (10, 20, 30)
 
     def test_scroll_speed_mapping(self):
         assert SCROLL_SPEED_MS["slow"] == 80

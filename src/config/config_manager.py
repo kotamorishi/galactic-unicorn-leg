@@ -23,6 +23,7 @@ DEFAULT_APP_CONFIG = {
         "display_mode": "scroll",
         "scroll_speed": "medium",
         "color": {"r": 255, "g": 255, "b": 255},
+        "bg_color": {"r": 0, "g": 0, "b": 0},
         "font": "bitmap8",
     },
     "schedules": [],
@@ -190,6 +191,7 @@ def _validate_message(msg):
         "display_mode": mode,
         "scroll_speed": speed,
         "color": _validate_color(msg.get("color", {})),
+        "bg_color": _validate_color(msg.get("bg_color", {"r": 0, "g": 0, "b": 0})),
         "font": font,
     }
 
