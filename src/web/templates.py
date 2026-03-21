@@ -99,20 +99,28 @@ async def render_main_page(config, presets, status):
         'selected' if msg.get("font") == "bitmap8" else "",
         ch)
 
-    # Schedule section
-    yield '<div class="s"><h2>Schedule</h2><div id="scheds">'
+    # Schedule section — data passed via JS variable, not HTML data-* attributes
+    yield '<div class="s"><h2>Schedule</h2><div id="scheds"></div><div class="acts"><button class="btn bs" onclick="addSc()">Add schedule</button><button class="btn bp" onclick="saveSc()">Save</button></div><div id="sc-toast" class="toast"></div></div>'
+
+    # Compact schedule data as JS array
+    sd = []
     for s in schedules:
-        days = ",".join(s.get("days", []))
-        days_display = ", ".join([x.capitalize() for x in s.get("days", [])]) or "Every day"
         snd = s.get("sound", {})
-        yield '<div class="sc" data-id="{}" data-start="{}" data-end="{}" data-en="{}" data-snd-en="{}" data-preset="{}" data-vol="{}" data-days="{}"><div class="sc-head"><label><input type="checkbox" class="sc-en" {}><span>{} - {}</span></label></div><div class="sc-days">{}</div></div>'.format(
-            s.get("id", 0), s.get("start_time", "00:00"), s.get("end_time", "23:59"),
-            "1" if s.get("enabled") else "0",
-            "1" if snd.get("enabled") else "0",
-            snd.get("preset_id", 1), snd.get("volume", 50), days,
-            "checked" if s.get("enabled") else "",
-            s.get("start_time", "00:00"), s.get("end_time", "23:59"), days_display)
-    yield '</div><div class="acts"><button class="btn bs" onclick="addSc()">Add schedule</button><button class="btn bp" onclick="saveSc()">Save</button></div><div id="sc-toast" class="toast"></div></div>'
+        sd.append("[{},{},{},{},{},{},{}]".format(
+            s.get("id", 0),
+            '"' + s.get("start_time", "00:00") + '"',
+            '"' + s.get("end_time", "23:59") + '"',
+            1 if s.get("enabled") else 0,
+            1 if snd.get("enabled") else 0,
+            snd.get("preset_id", 1),
+            snd.get("volume", 50),
+        ))
+    # Days as separate compact array to save memory
+    dd = []
+    for s in schedules:
+        dd.append('"' + ",".join(s.get("days", [])) + '"')
+    sched_data = "[" + ",".join(sd) + "]"
+    days_data = "[" + ",".join(dd) + "]"
 
     # Quick settings
     br = system.get("brightness", 50)
@@ -125,13 +133,14 @@ async def render_main_page(config, presets, status):
 
     # JS in chunks to avoid large string allocation
     yield '<script>' + _JS_COMMON
-    yield '\nvar P={},nid={};'.format(pa, nid)
+    yield '\nvar P={},nid={},S={},SD={};'.format(pa, nid, sched_data, days_data)
     yield """
 function popts(sel,sid){sel.innerHTML='';P.forEach(function(p){var o=document.createElement('option');o.value=p[0];o.textContent=p[1];if(p[0]==sid)o.selected=true;sel.appendChild(o)})}
 function saveMsg(){var c=document.getElementById('msg-color').value;api('POST','/api/message',{text:document.getElementById('msg-text').value,display_mode:document.getElementById('msg-mode').value,scroll_speed:document.getElementById('msg-speed').value,color:{r:parseInt(c.substr(1,2),16),g:parseInt(c.substr(3,2),16),b:parseInt(c.substr(5,2),16)},font:document.getElementById('msg-font').value}).then(function(){toast('msg-toast','Saved')}).catch(function(){toast('msg-toast','Failed',1)})}"""
     yield """
 function scEdit(el){if(el.querySelector('details'))return;var d=el.dataset;var h='<details open><summary>Edit</summary><div class="row2" style="margin-top:8px"><div><label>Start</label><input type="time" class="sc-start" value="'+d.start+'"></div><div><label>End</label><input type="time" class="sc-end" value="'+d.end+'"></div></div><label>Days</label><div class="days-row">';var ds=(d.days||'').split(',');['mon','tue','wed','thu','fri','sat','sun'].forEach(function(x){h+='<span class="dt"><input type="checkbox" data-day="'+x+'" '+(ds.indexOf(x)>=0?'checked':'')+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</span>'});h+='</div><label style="display:flex;align-items:center;gap:6px;color:#1c1c1e;margin-top:8px"><input type="checkbox" class="sc-snd-en" '+(d.sndEn=="1"?"checked":"")+'>Sound</label><div class="row2"><div><label>Preset</label><select class="sc-preset"></select></div><div><label>Volume</label><select class="sc-vol"><option value="25">25%</option><option value="50">50%</option><option value="75">75%</option><option value="100">100%</option></select></div></div><button class="btn bs bsm" onclick="playSnd(this)" style="margin-top:8px">Preview</button><div class="acts"><button class="btn bd bsm" onclick="delSc('+d.id+')">Remove</button></div></details>';el.insertAdjacentHTML('beforeend',h);popts(el.querySelector('.sc-preset'),parseInt(d.preset));var vs=el.querySelector('.sc-vol');if(vs)vs.value=d.vol}
-document.querySelectorAll('.sc').forEach(function(el){el.querySelector('.sc-head').addEventListener('click',function(e){if(e.target.type!='checkbox')scEdit(el)})})"""
+function renderSc(){var c=document.getElementById('scheds');c.innerHTML='';S.forEach(function(s,i){var id=s[0],st=s[1],en=s[2],on=s[3],se=s[4],pi=s[5],vo=s[6],ds=SD[i];var dd=ds?ds.split(',').map(function(x){return x.charAt(0).toUpperCase()+x.slice(1)}).join(', '):'Every day';var el=document.createElement('div');el.className='sc';el.dataset.id=id;el.dataset.start=st;el.dataset.end=en;el.dataset.en=on;el.dataset.sndEn=se;el.dataset.preset=pi;el.dataset.vol=vo;el.dataset.days=ds;el.innerHTML='<div class="sc-head"><label><input type="checkbox" class="sc-en" '+(on?'checked':'')+'>'+' <span>'+st+' - '+en+'</span></label></div><div class="sc-days">'+dd+'</div>';el.querySelector('.sc-head').addEventListener('click',function(e){if(e.target.type!='checkbox')scEdit(el)});c.appendChild(el);if(id>nid)nid=id})}
+renderSc()"""
     yield """
 function addSc(){nid++;var el=document.createElement('div');el.className='sc';el.dataset.id=nid;el.dataset.start='08:00';el.dataset.end='09:00';el.dataset.en='1';el.dataset.sndEn='0';el.dataset.preset='1';el.dataset.vol='50';el.dataset.days='mon,tue,wed,thu,fri,sat,sun';el.innerHTML='<div class="sc-head"><label><input type="checkbox" class="sc-en" checked><span>08:00 - 09:00</span></label></div><div class="sc-days">Every day</div>';document.getElementById('scheds').appendChild(el);scEdit(el)}
 function delSc(id){var e=document.querySelector('[data-id="'+id+'"]');if(e)e.remove()}
