@@ -31,8 +31,9 @@ class DisplayRenderer:
         self._active = False
         self._status_text = None
 
-    def init(self):
-        self._display.init()
+    def init(self, skip_hw_init=False):
+        if not skip_hw_init:
+            self._display.init()
 
     def configure(self, message_config):
         """Apply message config from app settings.

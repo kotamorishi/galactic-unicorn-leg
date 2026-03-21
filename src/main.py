@@ -67,7 +67,7 @@ from web.server import create_app
 # --- Component setup ---
 
 renderer = DisplayRenderer(display_hal)
-# display_hal.init() already called above — don't call renderer.init() to avoid double init
+renderer.init(skip_hw_init=True)  # display_hal.init() already called above
 
 player = AudioPlayer(audio_hal)
 player.init()
@@ -78,34 +78,57 @@ ota = OTAUpdater(system_hal, renderer)
 
 # --- WiFi boot sequence ---
 
+def _show_boot_msg(text, color=(255, 255, 255)):
+    """Show a boot message on the LED and pause briefly for visibility."""
+    display_hal.clear()
+    display_hal.set_font("bitmap6")
+    display_hal.set_pen(*color)
+    display_hal.draw_text(text, 0, 3)
+    display_hal.update()
+
+
 def boot_wifi():
     """Handle WiFi connection or AP mode setup.
 
     Returns True if STA connected, False if AP mode started.
     """
-    renderer.show_status("Connecting...")
-    renderer.render_frame()
+    _show_boot_msg("Starting...")
 
     if not config_manager.wifi_config_exists():
-        renderer.show_status("WiFi Setup")
-        renderer.render_frame()
-        wifi_mgr.start_ap()
+        _start_ap_with_display()
         return False
 
+    _show_boot_msg("WiFi...")
     connected = wifi_mgr.start_sta()
     if not connected:
-        renderer.show_status("WiFi Setup")
-        renderer.render_frame()
-        wifi_mgr.start_ap()
+        _start_ap_with_display()
         return False
 
     # NTP sync
-    renderer.show_status("NTP Sync...")
-    renderer.render_frame()
+    _show_boot_msg("NTP Sync...")
     wifi_mgr.sync_ntp()
+
+    ip = wifi_mgr.get_ip() or ""
+    _show_boot_msg(ip, color=(0, 255, 100))
+    time.sleep(2)
 
     renderer.clear_status()
     return True
+
+
+def _start_ap_with_display():
+    """Start AP mode and show setup instructions on LED."""
+    wifi_mgr.start_ap()
+    ap_ip = wifi_mgr.get_ap_ip() or "192.168.4.1"
+    # Configure renderer to scroll AP setup instructions
+    renderer.configure({
+        "text": "Connect to WiFi: GalacticUnicorn-Setup  Open: http://{ip}".format(ip=ap_ip),
+        "display_mode": "scroll",
+        "scroll_speed": "slow",
+        "color": {"r": 0, "g": 200, "b": 255},
+        "font": "bitmap6",
+    })
+    renderer.set_active(True)
 
 
 def load_config():
