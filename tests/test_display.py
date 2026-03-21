@@ -153,3 +153,27 @@ class TestDisplayRenderer:
         text_width = mock_display.measure_text("Hi", 1)
         expected_x = (53 - text_width) // 2
         assert text_items[0]["x"] == expected_x
+
+    def test_y_offset_centered_bitmap8(self, mock_display):
+        """bitmap8 (8px) on 11px display → Y = (11-8)//2 = 1"""
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "Hi", "display_mode": "fixed",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
+                     "scroll_speed": "medium"})
+        r.set_active(True)
+        r.render_frame()
+        texts = [i for i in mock_display.framebuffer if i["type"] == "text"]
+        assert texts[0]["y"] == 1  # (11 - 8) // 2
+
+    def test_y_offset_centered_bitmap6(self, mock_display):
+        """bitmap6 (6px) on 11px display → Y = (11-6)//2 = 2"""
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "Hi", "display_mode": "fixed",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap6",
+                     "scroll_speed": "medium"})
+        r.set_active(True)
+        r.render_frame()
+        texts = [i for i in mock_display.framebuffer if i["type"] == "text"]
+        assert texts[0]["y"] == 2  # (11 - 6) // 2

@@ -10,10 +10,10 @@ SCROLL_SPEED_MS = {
     "fast": 25,
 }
 
-# Y offset to vertically center text for each font
-FONT_Y_OFFSET = {
-    "bitmap6": 3,
-    "bitmap8": 2,
+# Actual pixel height of each font (used for vertical centering)
+FONT_HEIGHT = {
+    "bitmap6": 6,
+    "bitmap8": 8,
 }
 
 
@@ -29,6 +29,7 @@ class DisplayRenderer:
         self._font = "bitmap8"
         self._scroll_x = 0
         self._text_width = 0
+        self._y_offset = 1
         self._active = False
         self._manual_active = False
         self._status_text = None
@@ -41,7 +42,7 @@ class DisplayRenderer:
         """Apply message config from app settings.
 
         Args:
-            message_config: dict with text, display_mode, scroll_speed, color, font
+            message_config: dict with text, display_mode, scroll_speed, color, bg_color, font
         """
         self._text = message_config.get("text", "")
         self._mode = message_config.get("display_mode", "scroll")
@@ -59,6 +60,9 @@ class DisplayRenderer:
             bg.get("g", 0),
             bg.get("b", 0),
         )
+        # Calculate Y offset for vertical centering
+        fh = FONT_HEIGHT.get(self._font, 8)
+        self._y_offset = (self._display.HEIGHT - fh) // 2
         self._reset_scroll()
 
     def _reset_scroll(self):
@@ -98,18 +102,24 @@ class DisplayRenderer:
         For scroll mode, advances the scroll position by 1 pixel.
         Call this at the interval returned by get_scroll_interval_ms().
         """
-        self._display.clear()
-
         if self._status_text:
+            self._clear_with_color(0, 0, 0)
             self._render_status()
         elif self._active:
+            self._clear_with_color(*self._bg_color)
             if self._mode == "scroll":
                 self._render_scroll()
             else:
                 self._render_fixed()
-        # If not active and no status, display stays cleared (LEDs off)
+        else:
+            self._display.clear()
 
         self._display.update()
+
+    def _clear_with_color(self, r, g, b):
+        """Clear display by filling with a color. Single draw operation."""
+        self._display.set_pen(r, g, b)
+        self._display.draw_rectangle(0, 0, self._display.WIDTH, self._display.HEIGHT)
 
     def _render_status(self):
         """Render status text centered on display."""
@@ -117,36 +127,26 @@ class DisplayRenderer:
         self._display.set_pen(100, 100, 255)
         width = self._display.measure_text(self._status_text, 1)
         x = (self._display.WIDTH - width) // 2
-        y = FONT_Y_OFFSET.get("bitmap6", 3)
+        fh = FONT_HEIGHT.get("bitmap6", 6)
+        y = (self._display.HEIGHT - fh) // 2
         self._display.draw_text(self._status_text, x, y)
-
-    def _fill_bg(self):
-        """Fill display with background color."""
-        if self._bg_color != (0, 0, 0):
-            self._display.set_pen(*self._bg_color)
-            self._display.draw_rectangle(0, 0, self._display.WIDTH, self._display.HEIGHT)
 
     def _render_scroll(self):
         """Render scrolling text, advancing 1px per frame."""
-        self._fill_bg()
         self._display.set_font(self._font)
         self._display.set_pen(*self._color)
-        y = FONT_Y_OFFSET.get(self._font, 2)
-        self._display.draw_text(self._text, self._scroll_x, y)
+        self._display.draw_text(self._text, self._scroll_x, self._y_offset)
 
         self._scroll_x -= 1
-        # When text has fully scrolled off left side, reset to right
         if self._scroll_x < -self._text_width:
             self._scroll_x = self._display.WIDTH
 
     def _render_fixed(self):
         """Render fixed (non-scrolling) text, centered horizontally."""
-        self._fill_bg()
         self._display.set_font(self._font)
         self._display.set_pen(*self._color)
-        y = FONT_Y_OFFSET.get(self._font, 2)
         width = self._display.measure_text(self._text, 1)
         x = (self._display.WIDTH - width) // 2
         if x < 0:
             x = 0
-        self._display.draw_text(self._text, x, y)
+        self._display.draw_text(self._text, x, self._y_offset)
