@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# MicroPython build
+build/
+*.mpy
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+
+# Environment / secrets
+.env
+wifi_config.json
+
+# Thonny (MicroPython IDE)
+.thonny/
