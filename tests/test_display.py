@@ -86,7 +86,7 @@ class TestDisplayRenderer:
     def test_scroll_position_decrements(self, mock_display):
         r = DisplayRenderer(mock_display)
         r.init()
-        r.configure({"text": "Test", "display_mode": "scroll",
+        r.configure({"text": "ABCDEFGHIJ", "display_mode": "scroll",
                      "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
                      "scroll_speed": "medium"})
         r.set_active(True)
@@ -99,12 +99,14 @@ class TestDisplayRenderer:
         from display.renderer import SCROLL_GAP
         r = DisplayRenderer(mock_display)
         r.init()
-        r.configure({"text": "Hi", "display_mode": "scroll",
+        # Use long text so it stays in scroll mode (not auto-downgraded)
+        long_text = "ABCDEFGHIJ"  # 80px > 53px
+        r.configure({"text": long_text, "display_mode": "scroll",
                      "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
                      "scroll_speed": "medium"})
         r.set_active(True)
 
-        text_width = mock_display.measure_text("Hi", 1)
+        text_width = mock_display.measure_text(long_text, 1)
         # Should NOT wrap yet — still within gap
         r._scroll_x = -text_width - 1
         r.render_frame()
@@ -256,7 +258,8 @@ class TestDisplayRenderer:
         """Scroll mode must call update() on every frame."""
         r = DisplayRenderer(mock_display)
         r.init()
-        r.configure({"text": "Hello", "display_mode": "scroll",
+        # Use long text to avoid auto-downgrade to fixed
+        r.configure({"text": "ABCDEFGHIJ", "display_mode": "scroll",
                      "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
                      "scroll_speed": "medium"})
         r.set_active(True)
@@ -264,3 +267,28 @@ class TestDisplayRenderer:
         r.render_frame()
         r.render_frame()
         assert mock_display.update_count == 3
+
+    def test_short_text_scroll_auto_downgrades_to_fixed(self, mock_display):
+        """Text shorter than display width should use fixed mode even if scroll requested."""
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "Hi", "display_mode": "scroll",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
+                     "scroll_speed": "medium"})
+        # "Hi" is 16px on bitmap8 mock, display is 53px — fits
+        assert r._effective_mode == "fixed"
+        r.set_active(True)
+        r.render_frame()
+        r.render_frame()
+        # Should skip second update like fixed mode
+        assert mock_display.update_count == 1
+
+    def test_long_text_scroll_stays_scroll(self, mock_display):
+        """Text longer than display width must keep scrolling."""
+        r = DisplayRenderer(mock_display)
+        r.init()
+        # 8px per char * 10 chars = 80px > 53px
+        r.configure({"text": "ABCDEFGHIJ", "display_mode": "scroll",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
+                     "scroll_speed": "medium"})
+        assert r._effective_mode == "scroll"

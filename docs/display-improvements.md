@@ -10,3 +10,4 @@
 | 6 | Skip set_pen when pen color unchanged — dirty flag tracks bg/border changes; black bg + no border = 0 set_pen calls per frame |
 | 7 | Tighter scroll loop: 20px gap between text end and re-entry instead of full 53px screen width — shorter blank time for short messages |
 | 8 | Skip redundant redraws in fixed/status/inactive modes via _frame_dirty flag — 0 HAL calls per frame when content unchanged |
+| 9 | Auto-downgrade scroll→fixed when text fits on screen — short messages display centered without wasted scroll animation |

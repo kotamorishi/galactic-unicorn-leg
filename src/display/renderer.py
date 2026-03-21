@@ -101,6 +101,10 @@ class DisplayRenderer:
         self._text_width = self._display.measure_text(self._text, 1)
         # Total scroll distance before wrap: text exits left + gap before re-entry
         self._scroll_cycle = self._text_width + SCROLL_GAP
+        # Auto-downgrade: if text fits on screen, use fixed even if scroll requested
+        self._effective_mode = self._mode
+        if self._mode == "scroll" and self._text_width <= self._display.WIDTH:
+            self._effective_mode = "fixed"
         # Cache fixed-mode X position
         x = (self._display.WIDTH - self._text_width) // 2
         self._fixed_x = x if x >= 0 else 0
@@ -150,7 +154,7 @@ class DisplayRenderer:
             self._frame_dirty = False
         elif self._active:
             # Scroll mode must redraw every frame; fixed mode only when dirty
-            if self._mode == "fixed" and not self._frame_dirty:
+            if self._effective_mode == "fixed" and not self._frame_dirty:
                 return
             if self._has_bg:
                 self._display.set_pen(*self._bg_color)
@@ -158,7 +162,7 @@ class DisplayRenderer:
                 self._pen_dirty = True
             else:
                 self._display.clear()
-            if self._mode == "scroll":
+            if self._effective_mode == "scroll":
                 self._render_scroll()
             else:
                 self._render_fixed()
