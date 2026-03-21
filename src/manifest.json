@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "files": [
+    "main.py",
+    "boot.py",
+    "hal/__init__.py",
+    "hal/interfaces.py",
+    "hal/real.py",
+    "hal/mock.py",
+    "config/__init__.py",
+    "config/config_manager.py",
+    "display/__init__.py",
+    "display/renderer.py",
+    "audio/__init__.py",
+    "audio/presets.py",
+    "audio/player.py",
+    "scheduler/__init__.py",
+    "scheduler/scheduler.py",
+    "wifi/__init__.py",
+    "wifi/manager.py",
+    "web/__init__.py",
+    "web/server.py",
+    "web/routes.py",
+    "web/templates.py",
+    "ota/__init__.py",
+    "ota/updater.py",
+    "lib/microdot.py"
+  ]
+}
