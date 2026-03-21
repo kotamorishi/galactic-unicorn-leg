@@ -35,6 +35,7 @@ class DisplayRenderer:
         self._fixed_x = 0
         self._y_offset = 1
         self._font_set = False
+        self._pen_dirty = True
         self._active = False
         self._manual_active = False
         self._status_text = None
@@ -129,19 +130,23 @@ class DisplayRenderer:
         """
         if self._status_text:
             self._display.clear()
+            self._pen_dirty = True
             self._render_status()
         elif self._active:
             if self._has_bg:
                 self._display.set_pen(*self._bg_color)
                 self._display.draw_rectangle(0, 0, self._display.WIDTH, self._display.HEIGHT)
+                self._pen_dirty = True
             else:
                 self._display.clear()
+                # clear() doesn't change pen state; pen stays as text color if set
             if self._mode == "scroll":
                 self._render_scroll()
             else:
                 self._render_fixed()
         else:
             self._display.clear()
+            self._pen_dirty = True
 
         self._display.update()
 
@@ -167,17 +172,22 @@ class DisplayRenderer:
         if not self._border:
             return
         self._display.set_pen(*self._border_color)
-        # Top line (row 0)
+        self._pen_dirty = True
         self._display.draw_line(0, 0, self._display.WIDTH - 1, 0)
-        # Bottom line (row 10)
         self._display.draw_line(0, self._display.HEIGHT - 1,
                                 self._display.WIDTH - 1, self._display.HEIGHT - 1)
+
+    def _ensure_pen(self):
+        """Set text color pen only if it was changed by bg fill or border."""
+        if self._pen_dirty:
+            self._display.set_pen(*self._color)
+            self._pen_dirty = False
 
     def _render_scroll(self):
         """Render scrolling text, advancing 1px per frame."""
         self._draw_border()
         self._ensure_font()
-        self._display.set_pen(*self._color)
+        self._ensure_pen()
         self._display.draw_text(self._text, self._scroll_x, self._y_offset)
 
         self._scroll_x -= 1
@@ -188,5 +198,5 @@ class DisplayRenderer:
         """Render fixed (non-scrolling) text, centered horizontally."""
         self._draw_border()
         self._ensure_font()
-        self._display.set_pen(*self._color)
+        self._ensure_pen()
         self._display.draw_text(self._text, self._fixed_x, self._y_offset)
