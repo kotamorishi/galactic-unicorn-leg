@@ -29,7 +29,9 @@ class DisplayRenderer:
         self._font = "bitmap8"
         self._scroll_x = 0
         self._text_width = 0
+        self._fixed_x = 0
         self._y_offset = 1
+        self._font_set = False
         self._active = False
         self._manual_active = False
         self._status_text = None
@@ -66,10 +68,14 @@ class DisplayRenderer:
         self._reset_scroll()
 
     def _reset_scroll(self):
-        """Reset scroll position to start (off-screen right)."""
+        """Reset scroll position and cache layout calculations."""
         self._scroll_x = self._display.WIDTH
         self._display.set_font(self._font)
+        self._font_set = True
         self._text_width = self._display.measure_text(self._text, 1)
+        # Cache fixed-mode X position
+        x = (self._display.WIDTH - self._text_width) // 2
+        self._fixed_x = x if x >= 0 else 0
 
     def set_active(self, active, manual=False):
         """Enable or disable display output.
@@ -124,6 +130,7 @@ class DisplayRenderer:
     def _render_status(self):
         """Render status text centered on display."""
         self._display.set_font("bitmap6")
+        self._font_set = False  # Status uses different font; mark dirty
         self._display.set_pen(100, 100, 255)
         width = self._display.measure_text(self._status_text, 1)
         x = (self._display.WIDTH - width) // 2
@@ -131,9 +138,15 @@ class DisplayRenderer:
         y = (self._display.HEIGHT - fh) // 2
         self._display.draw_text(self._status_text, x, y)
 
+    def _ensure_font(self):
+        """Set font only if it changed (e.g., after status text used bitmap6)."""
+        if not self._font_set:
+            self._display.set_font(self._font)
+            self._font_set = True
+
     def _render_scroll(self):
         """Render scrolling text, advancing 1px per frame."""
-        self._display.set_font(self._font)
+        self._ensure_font()
         self._display.set_pen(*self._color)
         self._display.draw_text(self._text, self._scroll_x, self._y_offset)
 
@@ -143,10 +156,6 @@ class DisplayRenderer:
 
     def _render_fixed(self):
         """Render fixed (non-scrolling) text, centered horizontally."""
-        self._display.set_font(self._font)
+        self._ensure_font()
         self._display.set_pen(*self._color)
-        width = self._display.measure_text(self._text, 1)
-        x = (self._display.WIDTH - width) // 2
-        if x < 0:
-            x = 0
-        self._display.draw_text(self._text, x, self._y_offset)
+        self._display.draw_text(self._text, self._fixed_x, self._y_offset)

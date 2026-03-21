@@ -154,6 +154,17 @@ class TestDisplayRenderer:
         expected_x = (53 - text_width) // 2
         assert text_items[0]["x"] == expected_x
 
+    def test_fixed_x_cached_at_configure(self, mock_display):
+        """Fixed mode X should be pre-calculated, not computed per frame."""
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "Hi", "display_mode": "fixed",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
+                     "scroll_speed": "medium"})
+        text_width = mock_display.measure_text("Hi", 1)
+        expected_x = (53 - text_width) // 2
+        assert r._fixed_x == expected_x
+
     def test_y_offset_centered_bitmap8(self, mock_display):
         """bitmap8 (8px) on 11px display → Y = (11-8)//2 = 1"""
         r = DisplayRenderer(mock_display)
