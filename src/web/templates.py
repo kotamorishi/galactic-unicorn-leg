@@ -204,7 +204,7 @@ async def render_setup_page(networks):
     yield """
 function togManual(){document.getElementById('manual-row').style.display=document.getElementById('wifi-ssid').value===''?'block':'none'}
 function connectWifi(){var sel=document.getElementById('wifi-ssid');var m=document.getElementById('wifi-ssid-manual');var ssid=sel.value||(m?m.value:'');var pw=document.getElementById('wifi-pass').value;if(!ssid){toast('wifi-toast','Enter a network name',1);return}toast('wifi-toast','Saving...');api('POST','/api/wifi/connect',{ssid:ssid,password:pw}).then(function(r){if(r.status=='saved')toast('wifi-toast','WiFi saved! Rebooting...');else toast('wifi-toast',r.error||'Failed',1)}).catch(function(){toast('wifi-toast','Failed',1)})}
-</script></body></html>""""")
+</script></body></html>"""
 
 
 def _esc(s):
