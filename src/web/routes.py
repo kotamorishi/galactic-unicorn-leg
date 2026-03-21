@@ -1,16 +1,17 @@
 """HTTP route definitions for the web UI and API."""
 
 from config import config_manager
-from audio.presets import get_preset_list
-from web.templates import (
-    render_index, render_message_page, render_schedule_page,
-    render_sound_page, render_system_page, render_wifi_setup_page,
-)
+from audio.presets import get_preset_list, get_preset
+from web.templates import render_main_page, render_settings_page, render_setup_page
 
 
 def _json_response(data, status=200):
     """Helper to return a JSON response."""
     return data, status, {"Content-Type": "application/json"}
+
+
+def _html(content):
+    return content, 200, {"Content-Type": "text/html"}
 
 
 def register(app):
@@ -19,37 +20,32 @@ def register(app):
     # --- Page routes ---
 
     @app.route("/")
-    async def index(req):
-        return render_index(), 200, {"Content-Type": "text/html"}
-
-    @app.route("/message")
-    async def message_page(req):
+    async def main_page(req):
         config = config_manager.load_app_config()
-        return render_message_page(config["message"]), 200, {"Content-Type": "text/html"}
-
-    @app.route("/schedule")
-    async def schedule_page(req):
-        config = config_manager.load_app_config()
-        return render_schedule_page(config["schedules"]), 200, {"Content-Type": "text/html"}
-
-    @app.route("/sound")
-    async def sound_page(req):
         presets = get_preset_list()
-        return render_sound_page(presets), 200, {"Content-Type": "text/html"}
+        scheduler = app.ctx["scheduler"]
+        status = _get_display_status(scheduler, config)
+        return _html(render_main_page(config, presets, status))
 
-    @app.route("/system")
-    async def system_page(req):
+    @app.route("/settings")
+    async def settings_page(req):
         wifi_status = app.ctx["wifi_manager"].get_status()
-        config = config_manager.load_app_config()
         version = config_manager.load_version()
-        return render_system_page(wifi_status, config["system"], version), 200, {"Content-Type": "text/html"}
+        free_mem = app.ctx["system_hal"].get_free_memory()
+        return _html(render_settings_page(wifi_status, version, free_mem))
 
-    @app.route("/wifi-setup")
-    async def wifi_setup_page(req):
+    @app.route("/setup")
+    async def setup_page(req):
         networks = app.ctx["wifi_manager"].scan_networks()
-        return render_wifi_setup_page(networks), 200, {"Content-Type": "text/html"}
+        return _html(render_setup_page(networks))
 
     # --- API routes ---
+
+    @app.route("/api/status", methods=["GET"])
+    async def api_status(req):
+        config = config_manager.load_app_config()
+        scheduler = app.ctx["scheduler"]
+        return _json_response(_get_display_status(scheduler, config))
 
     @app.route("/api/message", methods=["GET"])
     async def api_get_message(req):
@@ -64,7 +60,6 @@ def register(app):
         config = config_manager.load_app_config()
         config["message"] = data
         saved = config_manager.save_app_config(config)
-        # Update display renderer with new config
         app.ctx["display_renderer"].configure(saved["message"])
         return _json_response(saved["message"])
 
@@ -81,24 +76,8 @@ def register(app):
         config = config_manager.load_app_config()
         config["schedules"] = data
         saved = config_manager.save_app_config(config)
-        # Update scheduler with new schedules
         app.ctx["scheduler"].set_schedules(saved["schedules"])
         return _json_response(saved["schedules"])
-
-    @app.route("/api/schedules/<schedule_id>", methods=["DELETE"])
-    async def api_delete_schedule(req, schedule_id):
-        schedule_id = int(schedule_id)
-        config = config_manager.load_app_config()
-        config["schedules"] = [
-            s for s in config["schedules"] if s.get("id") != schedule_id
-        ]
-        saved = config_manager.save_app_config(config)
-        app.ctx["scheduler"].set_schedules(saved["schedules"])
-        return _json_response(saved["schedules"])
-
-    @app.route("/api/sound/presets", methods=["GET"])
-    async def api_get_presets(req):
-        return _json_response(get_preset_list())
 
     @app.route("/api/sound/preview", methods=["POST"])
     async def api_preview_sound(req):
@@ -110,18 +89,9 @@ def register(app):
         await app.ctx["audio_player"].play_preset(preset_id, volume)
         return _json_response({"status": "ok"})
 
-    @app.route("/api/system", methods=["GET"])
-    async def api_get_system(req):
-        wifi_status = app.ctx["wifi_manager"].get_status()
-        config = config_manager.load_app_config()
-        version = config_manager.load_version()
-        free_mem = app.ctx["system_hal"].get_free_memory()
-        return _json_response({
-            "wifi": wifi_status,
-            "system": config["system"],
-            "version": version,
-            "free_memory": free_mem,
-        })
+    @app.route("/api/sound/presets", methods=["GET"])
+    async def api_get_presets(req):
+        return _json_response(get_preset_list())
 
     @app.route("/api/system/brightness", methods=["POST"])
     async def api_set_brightness(req):
@@ -134,6 +104,15 @@ def register(app):
         saved = config_manager.save_app_config(config)
         app.ctx["display_renderer"]._display.set_brightness(brightness)
         return _json_response({"brightness": saved["system"]["brightness"]})
+
+    @app.route("/api/system/volume", methods=["POST"])
+    async def api_set_volume(req):
+        data = req.json
+        if data is None:
+            return _json_response({"error": "Invalid JSON"}, 400)
+        volume = data.get("volume", 50)
+        app.ctx["audio_player"]._audio.set_volume(volume / 100.0)
+        return _json_response({"volume": volume})
 
     @app.route("/api/wifi/scan", methods=["GET"])
     async def api_wifi_scan(req):
@@ -154,10 +133,6 @@ def register(app):
             return _json_response({"status": "connected", "ip": app.ctx["wifi_manager"].get_ip()})
         return _json_response({"error": "Connection failed"}, 400)
 
-    @app.route("/api/wifi/status", methods=["GET"])
-    async def api_wifi_status(req):
-        return _json_response(app.ctx["wifi_manager"].get_status())
-
     @app.route("/api/ota/check", methods=["POST"])
     async def api_ota_check(req):
         if "ota_updater" not in app.ctx or app.ctx["ota_updater"] is None:
@@ -169,3 +144,60 @@ def register(app):
     async def api_reboot(req):
         app.ctx["system_hal"].reset()
         return _json_response({"status": "rebooting"})
+
+
+def _get_display_status(scheduler, config):
+    """Build current display status for the UI."""
+    try:
+        _, _, _, weekday, hour, minute, _ = scheduler.get_current_time()
+    except Exception:
+        return {"active": False, "message": config["message"]["text"]}
+
+    from scheduler.scheduler import is_time_in_range, is_day_match
+
+    active = False
+    active_end = None
+    next_start = None
+    next_day = None
+
+    for s in config.get("schedules", []):
+        if not s.get("enabled"):
+            continue
+        if is_day_match(weekday, s.get("days", [])):
+            if is_time_in_range(hour, minute, s["start_time"], s["end_time"]):
+                active = True
+                active_end = s["end_time"]
+                break
+
+    if not active:
+        # Find next upcoming schedule
+        day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        for s in config.get("schedules", []):
+            if not s.get("enabled"):
+                continue
+            if is_day_match(weekday, s.get("days", [])):
+                sh, sm = [int(x) for x in s["start_time"].split(":")]
+                if sh * 60 + sm > hour * 60 + minute:
+                    next_start = s["start_time"]
+                    next_day = day_names[weekday]
+                    break
+        if next_start is None:
+            for offset in range(1, 8):
+                check_day = (weekday + offset) % 7
+                for s in config.get("schedules", []):
+                    if not s.get("enabled"):
+                        continue
+                    if is_day_match(check_day, s.get("days", [])):
+                        next_start = s["start_time"]
+                        next_day = day_names[check_day]
+                        break
+                if next_start:
+                    break
+
+    return {
+        "active": active,
+        "message": config["message"]["text"],
+        "active_end": active_end,
+        "next_start": next_start,
+        "next_day": next_day,
+    }
