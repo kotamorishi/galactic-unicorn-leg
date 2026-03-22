@@ -215,6 +215,7 @@ def on_no_schedule():
 sched.on_schedule_active(on_schedule_active)
 sched.on_schedule_start(on_schedule_start)
 sched.on_no_schedule(on_no_schedule)
+renderer.on_scroll_cycle(_update_auto_brightness)
 
 
 # --- Auto brightness ---
@@ -229,6 +230,16 @@ def set_brightness_offset(offset):
 
 def get_brightness_offset():
     return _brightness_offset
+
+
+def _save_brightness_offset():
+    """Save current offset to config (called from button press)."""
+    try:
+        config = config_manager.load_app_config()
+        config["system"]["brightness_offset"] = _brightness_offset
+        config_manager.save_app_config(config)
+    except Exception:
+        pass
 
 
 def _update_auto_brightness():
@@ -247,16 +258,6 @@ def _update_auto_brightness():
 
 
 # --- Async tasks ---
-
-async def auto_brightness_loop():
-    """Periodically adjust brightness based on ambient light."""
-    while True:
-        try:
-            _update_auto_brightness()
-        except Exception as e:
-            print("auto_brightness_loop error:", e)
-        await asyncio.sleep(5)
-
 
 async def display_loop():
     """Continuously render display frames."""
@@ -355,16 +356,18 @@ async def button_check_loop():
                 renderer.show_status("Light:{}".format(light))
                 info_expire = now + 5000
 
-            # Brightness Up/Down buttons → adjust offset
+            # Brightness Up/Down buttons → adjust offset and save
             if buttons_hal.is_pressed("brightness_up") and not info_expire:
                 set_brightness_offset(_brightness_offset + 10)
                 _update_auto_brightness()
+                _save_brightness_offset()
                 renderer.show_status("Bri:{}%".format(_brightness_offset))
                 info_expire = now + 2000
 
             if buttons_hal.is_pressed("brightness_down") and not info_expire:
                 set_brightness_offset(_brightness_offset - 10)
                 _update_auto_brightness()
+                _save_brightness_offset()
                 renderer.show_status("Bri:{}%".format(_brightness_offset))
                 info_expire = now + 2000
 
@@ -410,7 +413,6 @@ async def main():
     # Start all async tasks
     asyncio.create_task(display_loop())
     asyncio.create_task(button_check_loop())
-    asyncio.create_task(auto_brightness_loop())
 
     if sta_connected:
         asyncio.create_task(scheduler_loop())

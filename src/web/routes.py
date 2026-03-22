@@ -91,6 +91,9 @@ def register(app):
         except Exception:
             status["time"] = "--:--:--"
             status["day"] = ""
+        # Include brightness offset for Web UI sync
+        if "get_brightness_offset" in app.ctx:
+            status["brightness_offset"] = app.ctx["get_brightness_offset"]()
         return _json_response(status)
 
     @app.route("/api/message", methods=["GET"])

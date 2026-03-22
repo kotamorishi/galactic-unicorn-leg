@@ -51,6 +51,7 @@ class DisplayRenderer:
         self._active = False
         self._manual_active = False
         self._status_text = None
+        self._on_scroll_cycle = None
 
     def init(self, skip_hw_init=False):
         if not skip_hw_init:
@@ -136,7 +137,18 @@ class DisplayRenderer:
             self._frame_dirty = True
             if active:
                 self._reset_scroll()
+                # Read sensor when display activates (for fixed mode)
+                if self._on_scroll_cycle:
+                    self._on_scroll_cycle()
         self._active = active
+
+    def on_scroll_cycle(self, callback):
+        """Register callback() called at the start of each scroll cycle.
+
+        Called when text wraps around, before the new cycle renders.
+        Right side of display is clear at this moment (good for sensor reads).
+        """
+        self._on_scroll_cycle = callback
 
     def show_status(self, text):
         """Show a temporary status message (e.g., 'Updating...')."""
@@ -234,6 +246,9 @@ class DisplayRenderer:
         # Wrap after text has fully exited left + gap
         if self._scroll_x < -self._scroll_cycle:
             self._scroll_x = self._display.WIDTH
+            # Fire callback at cycle start — right side is clear for sensor
+            if self._on_scroll_cycle:
+                self._on_scroll_cycle()
 
     def _render_fixed(self):
         """Render fixed (non-scrolling) text, centered horizontally."""
