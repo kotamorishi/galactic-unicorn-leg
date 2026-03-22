@@ -223,7 +223,7 @@ async def display_loop():
 
 
 async def scheduler_loop():
-    """Check schedules every minute."""
+    """Check schedules every minute. First check is immediate."""
     while True:
         try:
             sched.check()

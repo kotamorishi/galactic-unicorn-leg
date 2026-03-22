@@ -74,13 +74,13 @@ class Scheduler:
         self._on_schedule_active = None
         self._on_schedule_start = None
         self._on_no_schedule = None
-        self._last_triggered_starts = set()
+        self._last_active_id = None  # Track which schedule was active last check
         self._timezone_offset = 9
 
     def set_schedules(self, schedules):
         """Update the schedule list from app config."""
         self._schedules = schedules
-        self._last_triggered_starts.clear()
+        self._last_active_id = None
 
     def set_timezone_offset(self, offset):
         """Set timezone offset from UTC in hours."""
@@ -143,27 +143,23 @@ class Scheduler:
 
             if is_time_in_range(hour, minute, start_time, end_time):
                 active_found = True
+                sched_id = sched.get("id", 0)
 
                 if self._on_schedule_active:
                     self._on_schedule_active(sched)
 
-                # Check if this is the start of the schedule (trigger once)
-                sched_id = sched.get("id", 0)
-                start_key = (sched_id, current_minute_key)
+                # Fire on_schedule_start when this schedule was NOT active
+                # on the previous check (transition-based, not time-based).
+                # This handles: exact start time, mid-schedule save, reboot
+                if sched_id != self._last_active_id:
+                    if self._on_schedule_start:
+                        self._on_schedule_start(sched)
 
-                if is_schedule_start(hour, minute, start_time):
-                    if start_key not in self._last_triggered_starts:
-                        self._last_triggered_starts.add(start_key)
-                        if self._on_schedule_start:
-                            self._on_schedule_start(sched)
-
+                self._last_active_id = sched_id
                 break  # First matching schedule wins
 
-        # Clean up old trigger records (keep only current minute)
-        self._last_triggered_starts = {
-            (sid, mk) for sid, mk in self._last_triggered_starts
-            if mk == current_minute_key
-        }
+        if not active_found:
+            self._last_active_id = None
 
         if not active_found and self._on_no_schedule:
             self._on_no_schedule()
