@@ -13,6 +13,8 @@ try:
 except ImportError:
     import asyncio
 
+import sys
+
 try:
     import utime as time
 except ImportError:
@@ -215,7 +217,6 @@ def on_no_schedule():
 sched.on_schedule_active(on_schedule_active)
 sched.on_schedule_start(on_schedule_start)
 sched.on_no_schedule(on_no_schedule)
-renderer.on_scroll_cycle(_update_auto_brightness)
 
 
 # --- Auto brightness ---
@@ -255,6 +256,9 @@ def _update_auto_brightness():
         display_hal.set_brightness(int(final * 100))
     except Exception as e:
         print("auto_brightness error:", e)
+
+
+renderer.on_scroll_cycle(_update_auto_brightness)
 
 
 # --- Async tasks ---
@@ -430,8 +434,9 @@ async def main():
     await app.start_server(host="0.0.0.0", port=80)
 
 
-# Run
-try:
-    asyncio.run(main())
-except KeyboardInterrupt:
-    pass
+# Run (skip if imported for testing)
+if not getattr(sys, "_called_from_test", False):
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
