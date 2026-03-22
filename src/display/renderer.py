@@ -98,6 +98,7 @@ class DisplayRenderer:
         fh = FONT_HEIGHT.get(self._font, 8)
         self._y_offset = (self._display.HEIGHT - fh) // 2
         self._frame_dirty = True
+        self._pen_dirty = True
         self._reset_scroll()
 
     def _get_font_arg(self):
