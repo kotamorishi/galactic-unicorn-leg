@@ -171,11 +171,17 @@ def on_schedule_active(schedule):
     """Called when a schedule is currently active."""
     # Schedule takes over — clear manual mode
     renderer._manual_active = False
-    # Update message text from schedule if it has one
+    # Update message text and color from schedule if set
     msg_text = schedule.get("message", "")
-    if msg_text and msg_text != renderer._text:
+    sched_color = schedule.get("color", {})
+    needs_update = (msg_text and msg_text != renderer._text) or \
+                   (sched_color and sched_color != dict(zip(("r", "g", "b"), renderer._color)))
+    if needs_update:
         msg_cfg = dict(_get_msg_config())
-        msg_cfg["text"] = msg_text
+        if msg_text:
+            msg_cfg["text"] = msg_text
+        if sched_color:
+            msg_cfg["color"] = sched_color
         renderer.configure(msg_cfg)
     renderer.set_active(True)
 

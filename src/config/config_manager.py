@@ -125,6 +125,7 @@ def _validate_schedule(sched):
     text = str(sched.get("message", ""))
     if len(text) > 128:
         text = text[:128]
+    color = sched.get("color")
     validated = {
         "id": int(sched.get("id", 0)),
         "enabled": bool(sched.get("enabled", True)),
@@ -132,6 +133,7 @@ def _validate_schedule(sched):
         "end_time": _validate_time_str(sched.get("end_time", "23:59")),
         "days": _validate_days(sched.get("days", list(DAYS))),
         "message": text,
+        "color": _validate_color(color) if color else {},
         "sound": _validate_sound(sched.get("sound", {})),
     }
     return validated
