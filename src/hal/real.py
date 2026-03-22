@@ -56,12 +56,11 @@ class RealDisplay(DisplayInterface):
         self._gu.update(self._gfx)
 
     def set_brightness(self, level):
-        # GalacticUnicorn brightness is 0-255, we accept 0-100
-        raw = int(level * 2.55)
-        self._gu.set_brightness(raw)
+        # GalacticUnicorn brightness is 0.0-1.0, we accept 0-100
+        self._gu.set_brightness(level / 100.0)
 
     def get_brightness(self):
-        return int(self._gu.get_brightness() / 2.55)
+        return int(self._gu.get_brightness() * 100)
 
 
 class RealAudio(AudioInterface):
