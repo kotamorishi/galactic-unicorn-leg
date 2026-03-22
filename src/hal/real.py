@@ -213,12 +213,18 @@ class RealNetwork(NetworkInterface):
             return []
 
     def sync_ntp(self):
-        try:
-            import ntptime
-            ntptime.settime()
-            return True
-        except Exception:
-            return False
+        import ntptime
+        import time
+        ntptime.timeout = 10  # seconds (default is 1, too short)
+        for attempt in range(3):
+            try:
+                ntptime.settime()
+                print("NTP synced on attempt", attempt + 1)
+                return True
+            except Exception as e:
+                print("NTP attempt {} failed: {}".format(attempt + 1, e))
+                time.sleep(2)
+        return False
 
 
 class RealButtons(ButtonInterface):
