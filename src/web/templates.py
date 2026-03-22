@@ -95,9 +95,10 @@ async def render_main_page(config, presets, status):
         'selected' if msg.get("scroll_speed") == "slow" else "",
         'selected' if msg.get("scroll_speed") == "medium" else "",
         'selected' if msg.get("scroll_speed") == "fast" else "")
-    yield '<div class="row2"><div><label>Font</label><select id="msg-font"><option value="bitmap6" {}>Small</option><option value="bitmap8" {}>Normal</option></select></div><div><label>Color</label><input type="color" id="msg-color" value="{}"></div></div></details></div>'.format(
+    yield '<div class="row2"><div><label>Font</label><select id="msg-font"><option value="bitmap6" {}>Small (6px)</option><option value="bitmap8" {}>Normal (8px)</option><option value="font11" {}>Large (11px)</option></select></div><div><label>Color</label><input type="color" id="msg-color" value="{}"></div></div></details></div>'.format(
         'selected' if msg.get("font") == "bitmap6" else "",
         'selected' if msg.get("font") == "bitmap8" else "",
+        'selected' if msg.get("font") == "font11" else "",
         ch)
 
     # Schedule section — data passed via JS variable, not HTML data-* attributes
