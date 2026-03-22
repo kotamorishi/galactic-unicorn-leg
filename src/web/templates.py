@@ -157,7 +157,9 @@ function playSnd(btn){var el=btn.closest('.sc');api('POST','/api/sound/preview',
 function setBright(v){document.getElementById('q-bright-v').textContent=v+'%';api('POST','/api/system/brightness',{brightness:parseInt(v)})}
 function setVol(v){document.getElementById('q-vol-v').textContent=v+'%';api('POST','/api/system/volume',{volume:parseInt(v)})}"""
     yield """
-(function poll(){api('GET','/api/status').then(function(s){if(s.time)document.getElementById('clock-time').textContent=s.time;if(s.day)document.getElementById('clock-day').textContent=s.day;var l=document.getElementById('st-label'),u=document.getElementById('st-sub');if(s.active){l.textContent='Displaying';l.className='status-on';u.textContent='Until '+s.active_end}else if(s.next_start){l.textContent='Off';l.className='status-off';u.textContent='Next: '+s.next_day+' '+s.next_start}else{l.textContent='Off';l.className='status-off';u.textContent='No schedules set'}document.getElementById('st-msg').textContent=s.message||''}).catch(function(){});setTimeout(poll,1000)})()
+function fetchStatus(){api('GET','/api/status').then(function(s){if(s.time)document.getElementById('clock-time').textContent=s.time;if(s.day)document.getElementById('clock-day').textContent=s.day;var l=document.getElementById('st-label'),u=document.getElementById('st-sub');if(s.active){l.textContent='Displaying';l.className='status-on';u.textContent='Until '+s.active_end}else if(s.next_start){l.textContent='Off';l.className='status-off';u.textContent='Next: '+s.next_day+' '+s.next_start}else{l.textContent='Off';l.className='status-off';u.textContent='No schedules set'}document.getElementById('st-msg').textContent=s.message||''}).catch(function(){})}
+fetchStatus();
+document.addEventListener('visibilitychange',function(){if(!document.hidden)fetchStatus()});
 </script></body></html>"""
 
 
