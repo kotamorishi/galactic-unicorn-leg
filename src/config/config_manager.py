@@ -29,6 +29,7 @@ DEFAULT_APP_CONFIG = {
     "schedules": [],
     "system": {
         "brightness": 50,
+        "brightness_offset": 0,
         "timezone_offset": 9,
     },
 }
@@ -218,6 +219,7 @@ def _validate_app_config(config):
         system = {}
     merged["system"] = {
         "brightness": _clamp(int(system.get("brightness", 50)), 0, 100),
+        "brightness_offset": _clamp(int(system.get("brightness_offset", 0)), -50, 50),
         "timezone_offset": _clamp(int(system.get("timezone_offset", 9)), -12, 14),
     }
     return merged

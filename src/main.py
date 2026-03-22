@@ -139,7 +139,7 @@ def load_config(skip_display=False):
 
     if not skip_display:
         renderer.configure(config["message"])
-    display_hal.set_brightness(config["system"].get("brightness", 50))
+    # brightness is now auto-managed; offset loaded in main()
 
     sched.set_schedules(config["schedules"])
     sched.set_timezone_offset(config["system"].get("timezone_offset", 9))
@@ -217,7 +217,46 @@ sched.on_schedule_start(on_schedule_start)
 sched.on_no_schedule(on_no_schedule)
 
 
+# --- Auto brightness ---
+
+_brightness_offset = 0  # -50 to +50 (from Web UI / buttons)
+
+
+def set_brightness_offset(offset):
+    global _brightness_offset
+    _brightness_offset = max(-50, min(50, offset))
+
+
+def get_brightness_offset():
+    return _brightness_offset
+
+
+def _update_auto_brightness():
+    """Read light sensor and apply brightness with offset."""
+    try:
+        light = display_hal.get_light_level()  # 0-4095
+        # Map 0-4095 to 0.2-0.8
+        auto = 0.2 + (light / 4095.0) * 0.6
+        # Apply offset (-50 to +50 as percentage points)
+        final = auto + (_brightness_offset / 100.0)
+        # Clamp to 0.05-1.0 (never fully off)
+        final = max(0.05, min(1.0, final))
+        display_hal.set_brightness(int(final * 100))
+    except Exception as e:
+        print("auto_brightness error:", e)
+
+
 # --- Async tasks ---
+
+async def auto_brightness_loop():
+    """Periodically adjust brightness based on ambient light."""
+    while True:
+        try:
+            _update_auto_brightness()
+        except Exception as e:
+            print("auto_brightness_loop error:", e)
+        await asyncio.sleep(5)
+
 
 async def display_loop():
     """Continuously render display frames."""
@@ -316,6 +355,19 @@ async def button_check_loop():
                 renderer.show_status("Light:{}".format(light))
                 info_expire = now + 5000
 
+            # Brightness Up/Down buttons → adjust offset
+            if buttons_hal.is_pressed("brightness_up") and not info_expire:
+                set_brightness_offset(_brightness_offset + 10)
+                _update_auto_brightness()
+                renderer.show_status("Bri:{}%".format(_brightness_offset))
+                info_expire = now + 2000
+
+            if buttons_hal.is_pressed("brightness_down") and not info_expire:
+                set_brightness_offset(_brightness_offset - 10)
+                _update_auto_brightness()
+                renderer.show_status("Bri:{}%".format(_brightness_offset))
+                info_expire = now + 2000
+
         except Exception as e:
             print("button_check error:", e)
         await asyncio.sleep_ms(200)
@@ -339,6 +391,9 @@ async def main():
         "system_hal": system_hal,
         "ota_updater": ota if sta_connected else None,
         "invalidate_msg_cache": invalidate_msg_cache,
+        "set_brightness_offset": set_brightness_offset,
+        "get_brightness_offset": get_brightness_offset,
+        "update_auto_brightness": _update_auto_brightness,
     }
     app = create_app(app_context)
 
@@ -348,9 +403,14 @@ async def main():
     else:
         host = wifi_mgr.get_ap_ip() or "192.168.4.1"
 
+    # Initialize brightness offset from config
+    set_brightness_offset(config.get("system", {}).get("brightness_offset", 0))
+    _update_auto_brightness()
+
     # Start all async tasks
     asyncio.create_task(display_loop())
     asyncio.create_task(button_check_loop())
+    asyncio.create_task(auto_brightness_loop())
 
     if sta_connected:
         asyncio.create_task(scheduler_loop())

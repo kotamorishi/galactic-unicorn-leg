@@ -158,12 +158,15 @@ def register(app):
         data = req.json
         if data is None:
             return _json_response({"error": "Invalid JSON"}, 400)
-        brightness = data.get("brightness", 50)
+        offset = data.get("brightness_offset", 0)
+        # Save offset to config
         config = config_manager.load_app_config()
-        config["system"]["brightness"] = brightness
-        saved = config_manager.save_app_config(config)
-        app.ctx["display_renderer"]._display.set_brightness(brightness)
-        return _json_response({"brightness": saved["system"]["brightness"]})
+        config["system"]["brightness_offset"] = offset
+        config_manager.save_app_config(config)
+        # Apply
+        app.ctx["set_brightness_offset"](offset)
+        app.ctx["update_auto_brightness"]()
+        return _json_response({"brightness_offset": offset})
 
     @app.route("/api/system/timezone", methods=["POST"])
     async def api_set_timezone(req):
