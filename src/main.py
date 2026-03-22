@@ -191,11 +191,19 @@ def on_schedule_start(schedule):
     sound = schedule.get("sound", {})
     if sound.get("enabled"):
         asyncio.create_task(
-            player.play_preset(
+            _play_sound_3x(
                 sound.get("preset_id", 1),
                 sound.get("volume", 50),
             )
         )
+
+
+async def _play_sound_3x(preset_id, volume):
+    """Play a sound preset 3 times with 1-second pause between each."""
+    for i in range(3):
+        await player.play_preset(preset_id, volume)
+        if i < 2:
+            await asyncio.sleep(1)
 
 
 def on_no_schedule():
