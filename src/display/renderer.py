@@ -21,16 +21,10 @@ FONT_HEIGHT = {
 }
 
 # Custom font data (loaded lazily to save RAM)
-_font11_data = None
-
-
 def _get_font11():
-    """Load font11 bytearray on first use."""
-    global _font11_data
-    if _font11_data is None:
-        from display.font11_data import FONT_11
-        _font11_data = FONT_11
-    return _font11_data
+    """Load font11 bytearray on first use via binary file."""
+    from display.font11_data import get_font
+    return get_font()
 
 
 class DisplayRenderer:

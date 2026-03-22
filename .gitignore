@@ -20,3 +20,7 @@ wifi_config.json
 
 # Thonny (MicroPython IDE)
 .thonny/
+
+# Font source files (license restrictions)
+*.ttf
+*.otf

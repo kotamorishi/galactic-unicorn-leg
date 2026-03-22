@@ -197,8 +197,12 @@ class TestDisplayRenderer:
         texts = [i for i in mock_display.framebuffer if i["type"] == "text"]
         assert texts[0]["y"] == 2  # (11 - 6) // 2
 
-    def test_font11_fills_full_height(self, mock_display):
+    def test_font11_fills_full_height(self, mock_display, monkeypatch):
         """font11 (11px) on 11px display → Y = 0 (no offset needed)"""
+        # Mock the font loader to avoid file system dependency
+        import display.font11_data as fd
+        monkeypatch.setattr(fd, "get_font", lambda: bytearray([11, 6] + [6] * 105))
+
         r = DisplayRenderer(mock_display)
         r.init()
         r.configure({"text": "Hi", "display_mode": "fixed",

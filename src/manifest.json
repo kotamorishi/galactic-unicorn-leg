@@ -12,6 +12,7 @@
     "display/__init__.py",
     "display/renderer.py",
     "display/font11_data.py",
+    "display/font11.bin",
     "audio/__init__.py",
     "audio/presets.py",
     "audio/player.py",
