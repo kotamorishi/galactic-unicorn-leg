@@ -11,6 +11,7 @@
     "config/config_manager.py",
     "display/__init__.py",
     "display/renderer.py",
+    "display/font11_data.py",
     "audio/__init__.py",
     "audio/presets.py",
     "audio/player.py",

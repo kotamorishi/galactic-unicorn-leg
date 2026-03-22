@@ -25,7 +25,11 @@ class MockDisplay(DisplayInterface):
         self.initialized = True
 
     def set_font(self, font_name):
-        self.font = font_name
+        # font_name can be a string ("bitmap8") or bytearray (custom font)
+        if isinstance(font_name, (bytes, bytearray)):
+            self.font = "custom_{}px".format(font_name[0])  # height is byte 0
+        else:
+            self.font = font_name
 
     def set_pen(self, r, g, b):
         self.pen_color = (r, g, b)
@@ -41,7 +45,12 @@ class MockDisplay(DisplayInterface):
         })
 
     def measure_text(self, text, scale=1):
-        char_width = 6 if self.font == "bitmap6" else 8
+        if self.font == "bitmap6":
+            char_width = 6
+        elif self.font.startswith("custom_"):
+            char_width = 6  # GohuFont 11px is 6px wide
+        else:
+            char_width = 8
         return len(text) * char_width * scale
 
     def draw_pixel(self, x, y):

@@ -17,7 +17,20 @@ SCROLL_GAP = 20
 FONT_HEIGHT = {
     "bitmap6": 6,
     "bitmap8": 8,
+    "font11": 11,
 }
+
+# Custom font data (loaded lazily to save RAM)
+_font11_data = None
+
+
+def _get_font11():
+    """Load font11 bytearray on first use."""
+    global _font11_data
+    if _font11_data is None:
+        from display.font11_data import FONT_11
+        _font11_data = FONT_11
+    return _font11_data
 
 
 class DisplayRenderer:
@@ -93,10 +106,16 @@ class DisplayRenderer:
         self._frame_dirty = True
         self._reset_scroll()
 
+    def _get_font_arg(self):
+        """Return the font argument for set_font (string or bytearray)."""
+        if self._font == "font11":
+            return _get_font11()
+        return self._font
+
     def _reset_scroll(self):
         """Reset scroll position and cache layout calculations."""
         self._scroll_x = self._display.WIDTH
-        self._display.set_font(self._font)
+        self._display.set_font(self._get_font_arg())
         self._font_set = True
         self._text_width = self._display.measure_text(self._text, 1)
         # Total scroll distance before wrap: text exits left + gap before re-entry
@@ -190,7 +209,7 @@ class DisplayRenderer:
     def _ensure_font(self):
         """Set font only if it changed (e.g., after status text used bitmap6)."""
         if not self._font_set:
-            self._display.set_font(self._font)
+            self._display.set_font(self._get_font_arg())
             self._font_set = True
 
     def _draw_border(self):

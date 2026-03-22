@@ -46,7 +46,7 @@ DEFAULT_VERSION = {
 
 SCROLL_SPEEDS = ("slow", "medium", "fast")
 DISPLAY_MODES = ("fixed", "scroll")
-FONTS = ("bitmap6", "bitmap8")
+FONTS = ("bitmap6", "bitmap8", "font11")
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 

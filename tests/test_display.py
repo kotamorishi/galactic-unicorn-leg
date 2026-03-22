@@ -197,6 +197,20 @@ class TestDisplayRenderer:
         texts = [i for i in mock_display.framebuffer if i["type"] == "text"]
         assert texts[0]["y"] == 2  # (11 - 6) // 2
 
+    def test_font11_fills_full_height(self, mock_display):
+        """font11 (11px) on 11px display → Y = 0 (no offset needed)"""
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "Hi", "display_mode": "fixed",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "font11",
+                     "scroll_speed": "medium"})
+        assert r._y_offset == 0  # (11 - 11) // 2 = 0
+        r.set_active(True)
+        r.render_frame()
+        texts = [i for i in mock_display.framebuffer if i["type"] == "text"]
+        assert texts[0]["y"] == 0
+        assert mock_display.font == "custom_11px"
+
     def test_border_draws_top_and_bottom_lines(self, mock_display):
         r = DisplayRenderer(mock_display)
         r.init()
