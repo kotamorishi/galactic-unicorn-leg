@@ -279,6 +279,7 @@ async def button_check_loop():
             now = _ticks_ms()
             a_pressed = buttons_hal.is_pressed("a")
             b_pressed = buttons_hal.is_pressed("b")
+            c_pressed = buttons_hal.is_pressed("c")
             d_pressed = buttons_hal.is_pressed("d")
 
             # Clear info display when expired
@@ -297,16 +298,22 @@ async def button_check_loop():
                 ad_press_start = 0
 
             # A only → show IP address (non-blocking)
-            if a_pressed and not d_pressed and not b_pressed and not info_expire:
+            if a_pressed and not d_pressed and not b_pressed and not c_pressed and not info_expire:
                 ip = wifi_mgr.get_ip() or "No WiFi"
                 renderer.show_status(ip)
                 info_expire = now + 5000
 
             # B only → show configured SSID (non-blocking)
-            if b_pressed and not a_pressed and not d_pressed and not info_expire:
+            if b_pressed and not a_pressed and not d_pressed and not c_pressed and not info_expire:
                 wifi_cfg = config_manager.load_wifi_config()
                 ssid = wifi_cfg["ssid"] if wifi_cfg else "Not set"
                 renderer.show_status(ssid)
+                info_expire = now + 5000
+
+            # C only → show ambient light level (non-blocking)
+            if c_pressed and not a_pressed and not b_pressed and not d_pressed and not info_expire:
+                light = display_hal.get_light_level()
+                renderer.show_status("Light:{}".format(light))
                 info_expire = now + 5000
 
         except Exception as e:

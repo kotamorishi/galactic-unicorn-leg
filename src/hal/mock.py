@@ -80,6 +80,9 @@ class MockDisplay(DisplayInterface):
     def get_brightness(self):
         return self.brightness
 
+    def get_light_level(self):
+        return 2000
+
 
 class MockAudio(AudioInterface):
 

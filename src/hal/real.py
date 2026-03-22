@@ -62,6 +62,9 @@ class RealDisplay(DisplayInterface):
     def get_brightness(self):
         return int(self._gu.get_brightness() * 100)
 
+    def get_light_level(self):
+        return self._gu.light()
+
 
 class RealAudio(AudioInterface):
 

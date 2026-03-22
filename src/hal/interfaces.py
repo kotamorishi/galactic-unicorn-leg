@@ -60,6 +60,10 @@ class DisplayInterface:
         """Get current brightness (0-100)."""
         raise NotImplementedError
 
+    def get_light_level(self):
+        """Get ambient light sensor reading (0-4095, higher = brighter)."""
+        raise NotImplementedError
+
 
 class AudioInterface:
     """Abstract interface for audio playback."""
