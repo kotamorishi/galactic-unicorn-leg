@@ -162,10 +162,11 @@ def glyph_to_columns(glyph, target_height, font_ascent):
         for y in range(target_height):
             if grid[y][x]:
                 col_val |= (1 << y)
-        # For height > 8: 2 bytes per column (little-endian)
+        # For height > 8: 2 bytes per column
+        # PicoGraphics expects: B0 = rows 8-15 (bottom), B1 = rows 0-7 (top)
         if target_height > 8:
-            columns.append(col_val & 0xFF)
-            columns.append((col_val >> 8) & 0xFF)
+            columns.append((col_val >> 8) & 0xFF)  # B0: rows 8+
+            columns.append(col_val & 0xFF)          # B1: rows 0-7
         else:
             columns.append(col_val & 0xFF)
 
