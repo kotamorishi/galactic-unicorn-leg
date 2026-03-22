@@ -100,21 +100,28 @@ def register(app):
 
     @app.route("/api/message", methods=["POST"])
     async def api_set_message(req):
-        data = req.json
-        if data is None:
-            return _json_response({"error": "Invalid JSON"}, 400)
-        config = config_manager.load_app_config()
-        # Merge incoming fields into existing message config to preserve
-        # fields not sent by the UI (bg_color, border, border_color)
-        for k, v in data.items():
-            config["message"][k] = v
-        saved = config_manager.save_app_config(config)
-        app.ctx["display_renderer"].configure(saved["message"])
-        app.ctx["display_renderer"].set_active(True, manual=True)
-        # Invalidate cached message config so scheduler picks up changes
-        if "invalidate_msg_cache" in app.ctx:
-            app.ctx["invalidate_msg_cache"]()
-        return _json_response(saved["message"])
+        try:
+            data = req.json
+            if data is None:
+                return _json_response({"error": "Invalid JSON"}, 400)
+            config = config_manager.load_app_config()
+            # Merge only valid message fields to preserve bg_color/border
+            # and reject unexpected fields from other endpoints
+            valid_keys = {"text", "display_mode", "scroll_speed", "color", "bg_color",
+                          "border", "border_color", "font"}
+            for k, v in data.items():
+                if k in valid_keys:
+                    config["message"][k] = v
+            saved = config_manager.save_app_config(config)
+            app.ctx["display_renderer"].configure(saved["message"])
+            app.ctx["display_renderer"].set_active(True, manual=True)
+            # Invalidate cached message config so scheduler picks up changes
+            if "invalidate_msg_cache" in app.ctx:
+                app.ctx["invalidate_msg_cache"]()
+            return _json_response(saved["message"])
+        except Exception as e:
+            print("api_set_message error:", e)
+            return _json_response({"error": str(e)}, 500)
 
     @app.route("/api/schedules", methods=["GET"])
     async def api_get_schedules(req):
