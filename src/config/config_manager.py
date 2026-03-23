@@ -5,11 +5,7 @@ Writes use tmp+rename for atomicity to prevent corruption on power loss.
 """
 
 import os
-
-try:
-    import ujson as json
-except ImportError:
-    import json
+from lib.fs import file_exists, safe_write_json, safe_read_json
 
 
 WIFI_CONFIG_FILE = "wifi_config.json"
@@ -24,6 +20,8 @@ DEFAULT_APP_CONFIG = {
         "scroll_speed": "medium",
         "color": {"r": 255, "g": 255, "b": 255},
         "bg_color": {"r": 0, "g": 0, "b": 0},
+        "border": False,
+        "border_color": {},
         "font": "bitmap8",
     },
     "schedules": [],
@@ -51,38 +49,10 @@ FONTS = ("bitmap6", "bitmap8", "font11")
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 
-def _file_exists(path):
-    try:
-        os.stat(path)
-        return True
-    except OSError:
-        return False
-
-
-def _safe_write(path, data):
-    """Write JSON data atomically via tmp file + rename."""
-    tmp_path = path + ".tmp"
-    raw = json.dumps(data)
-    with open(tmp_path, "w") as f:
-        f.write(raw)
-    try:
-        os.rename(tmp_path, path)
-    except OSError:
-        # Some MicroPython builds require remove before rename
-        if _file_exists(path):
-            os.remove(path)
-        os.rename(tmp_path, path)
-
-
-def _safe_read(path, default=None):
-    """Read JSON file. Returns default if missing or corrupted."""
-    if not _file_exists(path):
-        return default
-    try:
-        with open(path, "r") as f:
-            return json.load(f)
-    except (ValueError, OSError):
-        return default
+# Aliases for backward compatibility within this module
+_file_exists = file_exists
+_safe_write = safe_write_json
+_safe_read = safe_read_json
 
 
 def _deep_merge(base, override):

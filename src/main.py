@@ -20,8 +20,6 @@ try:
 except ImportError:
     import time
 
-import gc
-
 
 def _ticks_ms():
     """Get current ticks in ms, compatible with CPython and MicroPython."""
@@ -240,8 +238,8 @@ def _save_brightness_offset():
         config = config_manager.load_app_config()
         config["system"]["brightness_offset"] = _brightness_offset
         config_manager.save_app_config(config)
-    except Exception:
-        pass
+    except Exception as e:
+        print("save_brightness error:", e)
 
 
 def _update_auto_brightness():

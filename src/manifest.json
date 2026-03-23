@@ -28,6 +28,7 @@
     "ota/__init__.py",
     "ota/updater.py",
     "lib/__init__.py",
+    "lib/fs.py",
     "lib/microdot.py"
   ]
 }

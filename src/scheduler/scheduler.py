@@ -129,7 +129,6 @@ class Scheduler:
         _, _, _, weekday, hour, minute, _ = self.get_current_time()
 
         active_found = False
-        current_minute_key = hour * 60 + minute
 
         for sched in self._schedules:
             if not sched.get("enabled", True):

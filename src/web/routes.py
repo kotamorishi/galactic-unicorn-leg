@@ -134,24 +134,32 @@ def register(app):
 
     @app.route("/api/schedules", methods=["POST"])
     async def api_set_schedules(req):
-        data = req.json
-        if not isinstance(data, list):
-            return _json_response({"error": "Expected array"}, 400)
-        config = config_manager.load_app_config()
-        config["schedules"] = data
-        saved = config_manager.save_app_config(config)
-        app.ctx["scheduler"].set_schedules(saved["schedules"])
-        return _json_response(saved["schedules"])
+        try:
+            data = req.json
+            if not isinstance(data, list):
+                return _json_response({"error": "Expected array"}, 400)
+            config = config_manager.load_app_config()
+            config["schedules"] = data
+            saved = config_manager.save_app_config(config)
+            app.ctx["scheduler"].set_schedules(saved["schedules"])
+            return _json_response(saved["schedules"])
+        except Exception as e:
+            print("api_set_schedules error:", e)
+            return _json_response({"error": str(e)}, 500)
 
     @app.route("/api/sound/preview", methods=["POST"])
     async def api_preview_sound(req):
-        data = req.json
-        if data is None:
-            return _json_response({"error": "Invalid JSON"}, 400)
-        preset_id = data.get("preset_id", 1)
-        volume = data.get("volume", 50)
-        await app.ctx["audio_player"].play_preset(preset_id, volume)
-        return _json_response({"status": "ok"})
+        try:
+            data = req.json
+            if data is None:
+                return _json_response({"error": "Invalid JSON"}, 400)
+            preset_id = data.get("preset_id", 1)
+            volume = data.get("volume", 50)
+            await app.ctx["audio_player"].play_preset(preset_id, volume)
+            return _json_response({"status": "ok"})
+        except Exception as e:
+            print("api_preview_sound error:", e)
+            return _json_response({"error": str(e)}, 500)
 
     @app.route("/api/sound/presets", methods=["GET"])
     async def api_get_presets(req):
@@ -159,39 +167,49 @@ def register(app):
 
     @app.route("/api/system/brightness", methods=["POST"])
     async def api_set_brightness(req):
-        data = req.json
-        if data is None:
-            return _json_response({"error": "Invalid JSON"}, 400)
-        offset = data.get("brightness_offset", 0)
-        # Save offset to config
-        config = config_manager.load_app_config()
-        config["system"]["brightness_offset"] = offset
-        config_manager.save_app_config(config)
-        # Apply
-        app.ctx["set_brightness_offset"](offset)
-        app.ctx["update_auto_brightness"]()
-        return _json_response({"brightness_offset": offset})
+        try:
+            data = req.json
+            if data is None:
+                return _json_response({"error": "Invalid JSON"}, 400)
+            offset = data.get("brightness_offset", 0)
+            config = config_manager.load_app_config()
+            config["system"]["brightness_offset"] = offset
+            config_manager.save_app_config(config)
+            app.ctx["set_brightness_offset"](offset)
+            app.ctx["update_auto_brightness"]()
+            return _json_response({"brightness_offset": offset})
+        except Exception as e:
+            print("api_set_brightness error:", e)
+            return _json_response({"error": str(e)}, 500)
 
     @app.route("/api/system/timezone", methods=["POST"])
     async def api_set_timezone(req):
-        data = req.json
-        if data is None:
-            return _json_response({"error": "Invalid JSON"}, 400)
-        tz = data.get("timezone_offset", 9)
-        config = config_manager.load_app_config()
-        config["system"]["timezone_offset"] = tz
-        saved = config_manager.save_app_config(config)
-        app.ctx["scheduler"].set_timezone_offset(tz)
-        return _json_response({"timezone_offset": saved["system"]["timezone_offset"]})
+        try:
+            data = req.json
+            if data is None:
+                return _json_response({"error": "Invalid JSON"}, 400)
+            tz = data.get("timezone_offset", 9)
+            config = config_manager.load_app_config()
+            config["system"]["timezone_offset"] = tz
+            saved = config_manager.save_app_config(config)
+            app.ctx["scheduler"].set_timezone_offset(tz)
+            return _json_response({"timezone_offset": saved["system"]["timezone_offset"]})
+        except Exception as e:
+            print("api_set_timezone error:", e)
+            return _json_response({"error": str(e)}, 500)
 
     @app.route("/api/system/volume", methods=["POST"])
     async def api_set_volume(req):
-        data = req.json
-        if data is None:
-            return _json_response({"error": "Invalid JSON"}, 400)
-        volume = data.get("volume", 50)
-        app.ctx["audio_player"]._audio.set_volume(volume / 100.0)
-        return _json_response({"volume": volume})
+        try:
+            data = req.json
+            if data is None:
+                return _json_response({"error": "Invalid JSON"}, 400)
+            volume = data.get("volume", 50)
+            app.ctx["audio_player"]._audio.set_volume(volume / 100.0)
+            return _json_response({"volume": volume})
+        except Exception as e:
+            print("api_set_volume error:", e)
+            return _json_response({"error": str(e)}, 500)
 
     @app.route("/api/wifi/scan", methods=["GET"])
     async def api_wifi_scan(req):
@@ -210,8 +228,7 @@ def register(app):
 
         # Save credentials first, then reboot into STA mode
         # (Pico W can't reliably do AP→STA switch without reboot)
-        from config import config_manager as cm
-        cm.save_wifi_config(ssid, password)
+        config_manager.save_wifi_config(ssid, password)
 
         try:
             import uasyncio as _asyncio

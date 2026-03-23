@@ -23,12 +23,7 @@ GITHUB_API_BASE = "https://api.github.com/repos"
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
 
 
-def _file_exists(path):
-    try:
-        os.stat(path)
-        return True
-    except OSError:
-        return False
+from lib.fs import file_exists as _file_exists
 
 
 def _ensure_dir(path):
