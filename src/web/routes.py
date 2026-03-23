@@ -241,7 +241,7 @@ def register(app):
 
             if height != 11:
                 return _json_response({"error": "height must be 11"}, 400)
-            max_w = 5000 if fmt == "mono" else 500
+            max_w = 5000 if fmt == "mono" else 360
             if width < 1 or width > max_w:
                 return _json_response({"error": "width 1-{}".format(max_w)}, 400)
             if fmt not in ("mono", "rgb"):

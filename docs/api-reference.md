@@ -319,7 +319,7 @@ Send a pre-rendered bitmap for display. Useful for Japanese text or custom graph
 
 **Mono format:** 1 bit/pixel, MSB = leftmost, rows padded to byte boundary. Max width 5000px (~454 Japanese chars).
 
-**RGB format:** 3 bytes/pixel (R,G,B), left-to-right top-to-bottom. Max width 500px.
+**RGB format:** 3 bytes/pixel (R,G,B), left-to-right top-to-bottom. Max width 360px.
 
 **Behavior:** Bitmap mode overrides text display. Cleared by `DELETE /api/bitmap`, `POST /api/message`, or schedule activation.
 
