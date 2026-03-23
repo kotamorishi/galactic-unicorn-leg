@@ -116,6 +116,7 @@ def register(app):
                 if k in valid_keys:
                     config["message"][k] = v
             saved = config_manager.save_app_config(config)
+            app.ctx["display_renderer"].clear_bitmap()
             app.ctx["display_renderer"].configure(saved["message"])
             app.ctx["display_renderer"].set_active(True, manual=True)
             # Invalidate cached message config so scheduler picks up changes
@@ -223,6 +224,66 @@ def register(app):
 
         _asyncio.create_task(_deferred_reboot())
         return _json_response({"status": "saved", "message": "WiFi saved. Rebooting..."})
+
+    @app.route("/api/bitmap", methods=["POST"])
+    async def api_set_bitmap(req):
+        try:
+            gc.collect()
+            data = req.json
+            if data is None:
+                return _json_response({"error": "Invalid JSON"}, 400)
+
+            width = data.get("width", 0)
+            height = data.get("height", 0)
+            fmt = data.get("format", "mono")
+            mode = data.get("display_mode", "scroll")
+            speed = data.get("scroll_speed", "medium")
+
+            if height != 11:
+                return _json_response({"error": "height must be 11"}, 400)
+            max_w = 530 if fmt == "mono" else 200
+            if width < 1 or width > max_w:
+                return _json_response({"error": "width 1-{}".format(max_w)}, 400)
+            if fmt not in ("mono", "rgb"):
+                return _json_response({"error": "format must be mono or rgb"}, 400)
+
+            try:
+                import ubinascii
+                raw = ubinascii.a2b_base64(data["data"])
+            except ImportError:
+                import binascii
+                raw = binascii.a2b_base64(data["data"])
+
+            if fmt == "mono":
+                expected = ((width + 7) // 8) * height
+            else:
+                expected = width * height * 3
+            if len(raw) != expected:
+                return _json_response({"error": "data size mismatch: got {} expected {}".format(len(raw), expected)}, 400)
+
+            color = data.get("color", {"r": 255, "g": 255, "b": 255})
+            bg = data.get("bg_color", {"r": 0, "g": 0, "b": 0})
+
+            renderer = app.ctx["display_renderer"]
+            renderer.set_bitmap(
+                width, height, fmt, bytearray(raw),
+                (color.get("r", 255), color.get("g", 255), color.get("b", 255)),
+                (bg.get("r", 0), bg.get("g", 0), bg.get("b", 0)),
+                mode, speed,
+            )
+            return _json_response({"status": "ok", "width": width, "format": fmt, "mode": mode})
+        except Exception as e:
+            print("api_set_bitmap error:", e)
+            return _json_response({"error": str(e)}, 500)
+
+    @app.route("/api/bitmap", methods=["DELETE"])
+    async def api_clear_bitmap(req):
+        renderer = app.ctx["display_renderer"]
+        renderer.clear_bitmap()
+        config = config_manager.load_app_config()
+        renderer.configure(config["message"])
+        renderer.set_active(True, manual=True)
+        return _json_response({"status": "ok", "mode": "text"})
 
     @app.route("/api/ota/check", methods=["POST"])
     async def api_ota_check(req):

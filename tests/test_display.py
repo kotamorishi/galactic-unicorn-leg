@@ -310,3 +310,101 @@ class TestDisplayRenderer:
                      "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
                      "scroll_speed": "medium"})
         assert r._effective_mode == "scroll"
+
+
+class TestBitmapRendering:
+
+    def _make_mono_bitmap(self, width, height=11):
+        """Create a simple mono bitmap with some pixels set."""
+        row_bytes = (width + 7) // 8
+        data = bytearray(row_bytes * height)
+        # Set first pixel of each row
+        for y in range(height):
+            data[y * row_bytes] |= 0x80  # MSB = leftmost pixel
+        return data
+
+    def test_set_bitmap_mono(self, mock_display):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        data = self._make_mono_bitmap(20)
+        r.set_bitmap(20, 11, "mono", data, (255, 0, 0), (0, 0, 0), "scroll", "medium")
+        assert r._bitmap_data is not None
+        assert r._bitmap_width == 20
+        assert r._bitmap_format == "mono"
+        assert r._active is True
+        assert r._manual_active is True
+
+    def test_set_bitmap_auto_downgrade(self, mock_display):
+        """Bitmap narrower than display should auto-downgrade to fixed."""
+        r = DisplayRenderer(mock_display)
+        r.init()
+        data = self._make_mono_bitmap(30)
+        r.set_bitmap(30, 11, "mono", data, (255, 255, 255), (0, 0, 0), "scroll", "medium")
+        assert r._effective_mode == "fixed"
+
+    def test_set_bitmap_wide_stays_scroll(self, mock_display):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        data = self._make_mono_bitmap(100)
+        r.set_bitmap(100, 11, "mono", data, (255, 255, 255), (0, 0, 0), "scroll", "medium")
+        assert r._effective_mode == "scroll"
+
+    def test_clear_bitmap(self, mock_display):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        data = self._make_mono_bitmap(20)
+        r.set_bitmap(20, 11, "mono", data, (255, 255, 255), (0, 0, 0), "fixed", "medium")
+        r.clear_bitmap()
+        assert r._bitmap_data is None
+
+    def test_render_bitmap_fixed(self, mock_display):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        data = self._make_mono_bitmap(10)
+        r.set_bitmap(10, 11, "mono", data, (255, 0, 0), (0, 0, 0), "fixed", "medium")
+        r.render_frame()
+        # Should have pixel_span calls for the set pixels
+        spans = [f for f in mock_display.framebuffer if f["type"] == "pixel_span"]
+        assert len(spans) > 0
+        assert spans[0]["color"] == (255, 0, 0)
+
+    def test_render_bitmap_scroll_advances(self, mock_display):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        data = self._make_mono_bitmap(100)
+        r.set_bitmap(100, 11, "mono", data, (255, 255, 255), (0, 0, 0), "scroll", "medium")
+        initial_x = r._scroll_x
+        r.render_frame()
+        assert r._scroll_x == initial_x - 1
+
+    def test_bitmap_get_pixel_mono(self, mock_display):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        # 8px wide bitmap, first byte = 0xA5 = 10100101
+        data = bytearray(1 * 11)  # 8px wide, 1 byte per row
+        data[0] = 0xA5  # row 0: bits 7,5,2,0 set
+        r._bitmap_data = data
+        r._bitmap_width = 8
+        r._bitmap_format = "mono"
+        assert r._bitmap_get_pixel(0, 0) is True   # bit 7
+        assert r._bitmap_get_pixel(1, 0) is False   # bit 6
+        assert r._bitmap_get_pixel(2, 0) is True   # bit 5
+        assert r._bitmap_get_pixel(7, 0) is True   # bit 0
+
+    def test_bitmap_mode_takes_priority(self, mock_display):
+        """Bitmap mode should render instead of text when active."""
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "Hello", "display_mode": "fixed",
+                     "color": {"r": 255, "g": 255, "b": 255}, "font": "bitmap8",
+                     "scroll_speed": "medium"})
+        r.set_active(True)
+        # Now set bitmap
+        data = self._make_mono_bitmap(10)
+        r.set_bitmap(10, 11, "mono", data, (0, 255, 0), (0, 0, 0), "fixed", "medium")
+        r.render_frame()
+        # Should have pixel_span (bitmap), not text
+        spans = [f for f in mock_display.framebuffer if f["type"] == "pixel_span"]
+        texts = [f for f in mock_display.framebuffer if f["type"] == "text"]
+        assert len(spans) > 0
+        assert len(texts) == 0

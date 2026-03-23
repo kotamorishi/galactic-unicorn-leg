@@ -59,6 +59,12 @@ class MockDisplay(DisplayInterface):
             "color": self.pen_color,
         })
 
+    def pixel_span(self, x, y, length):
+        self.framebuffer.append({
+            "type": "pixel_span", "x": x, "y": y, "length": length,
+            "color": self.pen_color,
+        })
+
     def draw_line(self, x1, y1, x2, y2):
         self.framebuffer.append({
             "type": "line", "x1": x1, "y1": y1, "x2": x2, "y2": y2,

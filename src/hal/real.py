@@ -46,6 +46,9 @@ class RealDisplay(DisplayInterface):
     def draw_pixel(self, x, y):
         self._gfx.pixel(x, y)
 
+    def pixel_span(self, x, y, length):
+        self._gfx.pixel_span(x, y, length)
+
     def draw_line(self, x1, y1, x2, y2):
         self._gfx.line(x1, y1, x2, y2)
 

@@ -171,7 +171,8 @@ def invalidate_msg_cache():
 
 def on_schedule_active(schedule):
     """Called when a schedule is currently active."""
-    # Schedule takes over — clear manual mode
+    # Schedule takes over — clear bitmap and manual mode
+    renderer.clear_bitmap()
     renderer._manual_active = False
     # Update message text and color from schedule if set
     msg_text = schedule.get("message", "")

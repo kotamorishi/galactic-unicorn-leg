@@ -52,6 +52,12 @@ class DisplayRenderer:
         self._manual_active = False
         self._status_text = None
         self._on_scroll_cycle = None
+        # Bitmap mode
+        self._bitmap_data = None
+        self._bitmap_width = 0
+        self._bitmap_format = "mono"
+        self._bitmap_color = (255, 255, 255)
+        self._bitmap_bg_color = (0, 0, 0)
 
     def init(self, skip_hw_init=False):
         if not skip_hw_init:
@@ -150,6 +156,41 @@ class DisplayRenderer:
         """
         self._on_scroll_cycle = callback
 
+    def set_bitmap(self, width, height, fmt, data, color, bg_color, mode, speed):
+        """Set bitmap data for display.
+
+        Args:
+            width: bitmap width in pixels
+            height: must be 11
+            fmt: "mono" or "rgb"
+            data: bytearray (already decoded from base64)
+            color: (r, g, b) foreground for mono
+            bg_color: (r, g, b) background
+            mode: "scroll" or "fixed"
+            speed: "slow", "medium", "fast"
+        """
+        self._bitmap_data = data
+        self._bitmap_width = width
+        self._bitmap_format = fmt
+        self._bitmap_color = color
+        self._bitmap_bg_color = bg_color
+        self._mode = mode
+        self._scroll_speed = speed
+        self._effective_mode = mode
+        if mode == "scroll" and width <= self._display.WIDTH:
+            self._effective_mode = "fixed"
+        self._scroll_x = self._display.WIDTH
+        self._scroll_cycle = width + SCROLL_GAP
+        self._frame_dirty = True
+        self._pen_dirty = True
+        self._active = True
+        self._manual_active = True
+
+    def clear_bitmap(self):
+        """Clear bitmap data and return to text mode."""
+        self._bitmap_data = None
+        self._frame_dirty = True
+
     def show_status(self, text):
         """Show a temporary status message (e.g., 'Updating...')."""
         self._status_text = text
@@ -171,6 +212,18 @@ class DisplayRenderer:
         For fixed/status/inactive modes, skips redraw if nothing changed.
         Call this at the interval returned by get_scroll_interval_ms().
         """
+        # Bitmap mode takes priority
+        if self._bitmap_data is not None and self._active:
+            if self._effective_mode == "fixed" and not self._frame_dirty:
+                return
+            self._display.clear()
+            if self._effective_mode == "scroll":
+                self._render_bitmap_scroll()
+            else:
+                self._render_bitmap_fixed()
+                self._frame_dirty = False
+            self._display.update()
+            return
         if self._status_text:
             if not self._frame_dirty:
                 return
@@ -256,3 +309,79 @@ class DisplayRenderer:
         self._ensure_font()
         self._ensure_pen()
         self._display.draw_text(self._text, self._fixed_x, self._y_offset)
+
+    # --- Bitmap rendering ---
+
+    def _bitmap_get_pixel(self, bx, by):
+        """Get pixel value from bitmap data at bitmap coords (bx, by).
+
+        For mono: returns True/False.
+        For rgb: returns (r, g, b) tuple.
+        """
+        if bx < 0 or bx >= self._bitmap_width or by < 0 or by >= 11:
+            return False if self._bitmap_format == "mono" else None
+        if self._bitmap_format == "mono":
+            row_bytes = (self._bitmap_width + 7) // 8
+            byte_idx = by * row_bytes + bx // 8
+            bit_idx = 7 - (bx % 8)
+            return bool(self._bitmap_data[byte_idx] & (1 << bit_idx))
+        else:
+            idx = (by * self._bitmap_width + bx) * 3
+            return (self._bitmap_data[idx], self._bitmap_data[idx + 1], self._bitmap_data[idx + 2])
+
+    def _render_bitmap_mono_row(self, y, offset_x):
+        """Render one row of mono bitmap using pixel_span for efficiency."""
+        self._display.set_pen(*self._bitmap_color)
+        span_start = -1
+        for sx in range(self._display.WIDTH):
+            bx = sx - offset_x
+            if 0 <= bx < self._bitmap_width and self._bitmap_get_pixel(bx, y):
+                if span_start < 0:
+                    span_start = sx
+            else:
+                if span_start >= 0:
+                    self._display.pixel_span(span_start, y, sx - span_start)
+                    span_start = -1
+        if span_start >= 0:
+            self._display.pixel_span(span_start, y, self._display.WIDTH - span_start)
+
+    def _render_bitmap_rgb_row(self, y, offset_x):
+        """Render one row of RGB bitmap pixel by pixel."""
+        last_color = None
+        for sx in range(self._display.WIDTH):
+            bx = sx - offset_x
+            if 0 <= bx < self._bitmap_width:
+                c = self._bitmap_get_pixel(bx, y)
+                if c and c != (0, 0, 0):
+                    if c != last_color:
+                        self._display.set_pen(*c)
+                        last_color = c
+                    self._display.draw_pixel(sx, y)
+
+    def _render_bitmap_frame(self, offset_x):
+        """Render bitmap at given x offset."""
+        # Background
+        if self._bitmap_bg_color != (0, 0, 0):
+            self._display.set_pen(*self._bitmap_bg_color)
+            self._display.draw_rectangle(0, 0, self._display.WIDTH, self._display.HEIGHT)
+        for y in range(self._display.HEIGHT):
+            if self._bitmap_format == "mono":
+                self._render_bitmap_mono_row(y, offset_x)
+            else:
+                self._render_bitmap_rgb_row(y, offset_x)
+
+    def _render_bitmap_scroll(self):
+        """Render scrolling bitmap, advancing 1px per frame."""
+        self._render_bitmap_frame(self._scroll_x)
+        self._scroll_x -= 1
+        if self._scroll_x < -self._scroll_cycle:
+            self._scroll_x = self._display.WIDTH
+            if self._on_scroll_cycle:
+                self._on_scroll_cycle()
+
+    def _render_bitmap_fixed(self):
+        """Render fixed bitmap, centered horizontally."""
+        offset_x = (self._display.WIDTH - self._bitmap_width) // 2
+        if offset_x < 0:
+            offset_x = 0
+        self._render_bitmap_frame(offset_x)

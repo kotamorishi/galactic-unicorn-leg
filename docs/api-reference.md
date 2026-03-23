@@ -287,6 +287,84 @@ Preset list:
 
 ---
 
+### POST /api/bitmap
+
+Send a pre-rendered bitmap for display. Useful for Japanese text or custom graphics rendered externally.
+
+**Request:**
+
+```json
+{
+  "width": 120,
+  "height": 11,
+  "format": "mono",
+  "color": {"r": 255, "g": 200, "b": 0},
+  "bg_color": {"r": 0, "g": 0, "b": 0},
+  "display_mode": "scroll",
+  "scroll_speed": "medium",
+  "data": "<base64-encoded bitmap>"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `width` | int | Yes | Bitmap width in pixels |
+| `height` | int | Yes | Must be 11 |
+| `format` | string | Yes | `"mono"` (1-bit + color) or `"rgb"` (3 bytes/pixel) |
+| `color` | object | mono only | Foreground `{r, g, b}` |
+| `bg_color` | object | No | Background `{r, g, b}` (default: black) |
+| `display_mode` | string | No | `"scroll"` or `"fixed"` (default: scroll) |
+| `scroll_speed` | string | No | `"slow"`, `"medium"`, `"fast"` (default: medium) |
+| `data` | string | Yes | Base64-encoded binary bitmap data |
+
+**Mono format:** 1 bit/pixel, MSB = leftmost, rows padded to byte boundary. Max width 530px.
+
+**RGB format:** 3 bytes/pixel (R,G,B), left-to-right top-to-bottom. Max width 200px.
+
+**Behavior:** Bitmap mode overrides text display. Cleared by `DELETE /api/bitmap`, `POST /api/message`, or schedule activation.
+
+**Response:** `{"status": "ok", "width": 120, "format": "mono", "mode": "scroll"}`
+
+**Python example (Japanese text):**
+
+```python
+import requests, base64
+from PIL import Image, ImageDraw, ImageFont
+
+font = ImageFont.truetype("NotoSansJP-Regular.ttf", 10)
+bbox = font.getbbox("こんにちは")
+w = bbox[2] - bbox[0] + 2
+
+img = Image.new("1", (w, 11), 0)
+draw = ImageDraw.Draw(img)
+draw.text((0, (11 - bbox[3] + bbox[1]) // 2 - bbox[1]), "こんにちは", fill=1, font=font)
+
+row_bytes = (w + 7) // 8
+bitmap = bytearray(row_bytes * 11)
+px = img.load()
+for y in range(11):
+    for x in range(w):
+        if px[x, y]:
+            bitmap[y * row_bytes + x // 8] |= (1 << (7 - x % 8))
+
+requests.post("http://192.168.1.42/api/bitmap", json={
+    "width": w, "height": 11, "format": "mono",
+    "color": {"r": 255, "g": 200, "b": 0},
+    "display_mode": "scroll",
+    "data": base64.b64encode(bitmap).decode()
+})
+```
+
+---
+
+### DELETE /api/bitmap
+
+Clear bitmap and return to normal text display.
+
+**Response:** `{"status": "ok", "mode": "text"}`
+
+---
+
 ### POST /api/system/brightness
 
 Set brightness offset for auto-brightness adjustment.

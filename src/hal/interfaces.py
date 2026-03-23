@@ -40,6 +40,10 @@ class DisplayInterface:
         """Draw a single pixel at (x, y)."""
         raise NotImplementedError
 
+    def pixel_span(self, x, y, length):
+        """Draw a horizontal span of pixels starting at (x, y)."""
+        raise NotImplementedError
+
     def draw_line(self, x1, y1, x2, y2):
         """Draw a line from (x1,y1) to (x2,y2)."""
         raise NotImplementedError
