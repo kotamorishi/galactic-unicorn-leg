@@ -515,6 +515,57 @@ HTTP status codes:
 
 ---
 
+## Character Support
+
+### Text mode (`POST /api/message`)
+
+Text mode uses on-device bitmap fonts. Supported characters depend on the selected font:
+
+#### Built-in fonts: `bitmap6`, `bitmap8`
+
+PicoGraphics built-in fonts. 105 characters total:
+
+| Range | Characters | Count |
+|-------|-----------|-------|
+| ASCII printable | ` ` (space) through `~` (U+0020–U+007E) | 95 |
+| Extended | Æ Ø Å æ ø å Þ þ © ° | 10 |
+
+Includes: `A-Z`, `a-z`, `0-9`, and symbols: `` !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ ``
+
+**Not supported:** Japanese (漢字, ひらがな, カタカナ), Chinese, Korean, emoji, accented characters beyond the 10 extended above.
+
+#### Custom font: `font11`
+
+8-Bit Wonder font (11px, fills full display height). Same 105 character slots as built-in fonts, but:
+
+- **Uppercase only** — lowercase input `a-z` is automatically displayed as `A-Z`
+- Digits `0-9` and common symbols are supported
+- Extended characters (Æ, ©, ° etc.) may render as uppercase equivalents
+
+### Bitmap mode (`POST /api/bitmap`)
+
+**No character limitation.** The external device (Raspberry Pi etc.) renders text to pixels using any font, then sends the pixel data. This supports:
+
+- Japanese (漢字, ひらがな, カタカナ)
+- Chinese, Korean, Thai, Arabic, etc.
+- Emoji (if the font supports them)
+- Any Unicode character
+
+The device receives raw pixel data — it does not need to know about character encoding.
+
+| Method | Characters | How |
+|--------|-----------|-----|
+| `POST /api/message` (text) | ASCII + 10 extended (105 total) | On-device font rendering |
+| `POST /api/bitmap` (bitmap) | **Any Unicode** | External rendering via Pillow etc. |
+
+### Encoding
+
+- All API requests/responses use **UTF-8** JSON encoding
+- Text in `POST /api/message` is UTF-8 but only ASCII characters will render correctly on the LED (unsupported characters display as blank or garbled)
+- For non-ASCII text, use `POST /api/bitmap` with pre-rendered pixel data
+
+---
+
 ## Notes for External Integration
 
 - **No authentication** — anyone on the local network can call these APIs
