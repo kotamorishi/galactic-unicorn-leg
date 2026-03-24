@@ -269,28 +269,6 @@ class DisplayRenderer:
         y = (self._display.HEIGHT - fh) // 2
         self._display.draw_text(self._status_text, x, y)
 
-    def _ensure_font(self):
-        """Set font only if it changed (e.g., after status text used bitmap6)."""
-        if not self._font_set:
-            self._display.set_font(self._get_font_arg())
-            self._font_set = True
-
-    def _draw_border(self):
-        """Draw 1px accent lines at top and bottom edges of the display."""
-        if not self._border:
-            return
-        self._display.set_pen(*self._border_color)
-        self._pen_dirty = True
-        self._display.draw_line(0, 0, self._display.WIDTH - 1, 0)
-        self._display.draw_line(0, self._display.HEIGHT - 1,
-                                self._display.WIDTH - 1, self._display.HEIGHT - 1)
-
-    def _ensure_pen(self):
-        """Set text color pen only if it was changed by bg fill or border."""
-        if self._pen_dirty:
-            self._display.set_pen(*self._color)
-            self._pen_dirty = False
-
     def _render_scroll(self):
         """Render scrolling text, advancing 1px per frame.
 

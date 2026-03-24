@@ -56,8 +56,7 @@ def _mid(title):
     return '</style></head><body><h1>{}</h1>'.format(title)
 
 
-def _foot(js=""):
-    return '<script>{}{}</script></body></html>'.format(_JS_COMMON, js)
+
 
 
 async def render_main_page(config, presets, status):

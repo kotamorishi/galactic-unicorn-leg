@@ -408,3 +408,20 @@ class TestBitmapRendering:
         texts = [f for f in mock_display.framebuffer if f["type"] == "text"]
         assert len(spans) > 0
         assert len(texts) == 0
+
+    def test_render_bitmap_rgb(self, mock_display):
+        """RGB bitmap should use draw_pixel with correct colors."""
+        r = DisplayRenderer(mock_display)
+        r.init()
+        # 2px wide RGB bitmap: pixel (0,0)=red, pixel (1,0)=green
+        data = bytearray([
+            255, 0, 0,  # (0,0) red
+            0, 255, 0,  # (1,0) green
+        ] + [0] * (2 * 10 * 3))  # rest of rows black
+        r.set_bitmap(2, 11, "rgb", data, (255, 255, 255), (0, 0, 0), "fixed", "medium")
+        r.render_frame()
+        pixels = [f for f in mock_display.framebuffer if f["type"] == "pixel"]
+        assert len(pixels) >= 2
+        colors = [p["color"] for p in pixels]
+        assert (255, 0, 0) in colors
+        assert (0, 255, 0) in colors

@@ -2,7 +2,7 @@
 
 import gc
 from config import config_manager
-from audio.presets import get_preset_list, get_preset
+from audio.presets import get_preset_list
 from web.templates import render_main_page, render_settings_page, render_setup_page
 
 
@@ -218,29 +218,31 @@ def register(app):
 
     @app.route("/api/wifi/connect", methods=["POST"])
     async def api_wifi_connect(req):
-        data = req.json
-        if data is None:
-            return _json_response({"error": "Invalid JSON"}, 400)
-        ssid = data.get("ssid", "")
-        password = data.get("password", "")
-        if not ssid:
-            return _json_response({"error": "SSID required"}, 400)
-
-        # Save credentials first, then reboot into STA mode
-        # (Pico W can't reliably do AP→STA switch without reboot)
-        config_manager.save_wifi_config(ssid, password)
-
         try:
-            import uasyncio as _asyncio
-        except ImportError:
-            import asyncio as _asyncio
+            data = req.json
+            if data is None:
+                return _json_response({"error": "Invalid JSON"}, 400)
+            ssid = data.get("ssid", "")
+            password = data.get("password", "")
+            if not ssid:
+                return _json_response({"error": "SSID required"}, 400)
 
-        async def _deferred_reboot():
-            await _asyncio.sleep(2)
-            app.ctx["system_hal"].reset()
+            config_manager.save_wifi_config(ssid, password)
 
-        _asyncio.create_task(_deferred_reboot())
-        return _json_response({"status": "saved", "message": "WiFi saved. Rebooting..."})
+            try:
+                import uasyncio as _asyncio
+            except ImportError:
+                import asyncio as _asyncio
+
+            async def _deferred_reboot():
+                await _asyncio.sleep(2)
+                app.ctx["system_hal"].reset()
+
+            _asyncio.create_task(_deferred_reboot())
+            return _json_response({"status": "saved", "message": "WiFi saved. Rebooting..."})
+        except Exception as e:
+            print("api_wifi_connect error:", e)
+            return _json_response({"error": str(e)}, 500)
 
     @app.route("/api/bitmap", methods=["POST"])
     async def api_set_bitmap(req):
@@ -304,10 +306,14 @@ def register(app):
 
     @app.route("/api/ota/check", methods=["POST"])
     async def api_ota_check(req):
-        if "ota_updater" not in app.ctx or app.ctx["ota_updater"] is None:
-            return _json_response({"error": "OTA not configured"}, 400)
-        result = await app.ctx["ota_updater"].check_and_update()
-        return _json_response(result)
+        try:
+            if "ota_updater" not in app.ctx or app.ctx["ota_updater"] is None:
+                return _json_response({"error": "OTA not configured"}, 400)
+            result = await app.ctx["ota_updater"].check_and_update()
+            return _json_response(result)
+        except Exception as e:
+            print("api_ota_check error:", e)
+            return _json_response({"error": str(e)}, 500)
 
     @app.route("/api/system/reboot", methods=["POST"])
     async def api_reboot(req):
