@@ -17,22 +17,32 @@ class RealDisplay(DisplayInterface):
         self._gu = None
         self._gfx = None
         self._current_pen = None
+        self._black_pen = None
+        self._pen_cache = {}
 
     def init(self):
         self._gu = GalacticUnicorn()
         self._gfx = PicoGraphics(display=DISPLAY_GALACTIC_UNICORN)
+        self._black_pen = self._gfx.create_pen(0, 0, 0)
         return self._gu
 
     def set_font(self, font_name):
         self._gfx.set_font(font_name)
 
     def set_pen(self, r, g, b):
-        self._current_pen = self._gfx.create_pen(r, g, b)
-        self._gfx.set_pen(self._current_pen)
+        key = (r, g, b)
+        pen = self._pen_cache.get(key)
+        if pen is None:
+            pen = self._gfx.create_pen(r, g, b)
+            # Limit cache size to avoid unbounded growth
+            if len(self._pen_cache) > 16:
+                self._pen_cache.clear()
+            self._pen_cache[key] = pen
+        self._current_pen = pen
+        self._gfx.set_pen(pen)
 
     def clear(self):
-        black = self._gfx.create_pen(0, 0, 0)
-        self._gfx.set_pen(black)
+        self._gfx.set_pen(self._black_pen)
         self._gfx.clear()
         if self._current_pen is not None:
             self._gfx.set_pen(self._current_pen)

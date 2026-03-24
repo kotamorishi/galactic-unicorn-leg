@@ -34,6 +34,7 @@ class DisplayRenderer:
         self._text = ""
         self._mode = "scroll"
         self._scroll_speed = "medium"
+        self._scroll_interval_ms = 50
         self._color = (255, 255, 255)
         self._bg_color = (0, 0, 0)
         self._has_bg = False
@@ -72,6 +73,7 @@ class DisplayRenderer:
         self._text = message_config.get("text", "")
         self._mode = message_config.get("display_mode", "scroll")
         self._scroll_speed = message_config.get("scroll_speed", "medium")
+        self._scroll_interval_ms = SCROLL_SPEED_MS.get(self._scroll_speed, 50)
         color = message_config.get("color", {})
         self._color = (
             color.get("r", 255),
@@ -176,6 +178,7 @@ class DisplayRenderer:
         self._bitmap_bg_color = bg_color
         self._mode = mode
         self._scroll_speed = speed
+        self._scroll_interval_ms = SCROLL_SPEED_MS.get(speed, 50)
         self._effective_mode = mode
         if mode == "scroll" and width <= self._display.WIDTH:
             self._effective_mode = "fixed"
@@ -202,8 +205,8 @@ class DisplayRenderer:
         self._frame_dirty = True
 
     def get_scroll_interval_ms(self):
-        """Return the scroll update interval in ms."""
-        return SCROLL_SPEED_MS.get(self._scroll_speed, 50)
+        """Return the cached scroll update interval in ms."""
+        return self._scroll_interval_ms
 
     def render_frame(self):
         """Render one frame to the display.
@@ -313,62 +316,73 @@ class DisplayRenderer:
     # --- Bitmap rendering ---
 
     def _bitmap_get_pixel(self, bx, by):
-        """Get pixel value from bitmap data at bitmap coords (bx, by).
-
-        For mono: returns True/False.
-        For rgb: returns (r, g, b) tuple.
-        """
+        """Get mono pixel value (for tests/external use, not hot path)."""
         if bx < 0 or bx >= self._bitmap_width or by < 0 or by >= 11:
-            return False if self._bitmap_format == "mono" else None
-        if self._bitmap_format == "mono":
-            row_bytes = (self._bitmap_width + 7) // 8
-            byte_idx = by * row_bytes + bx // 8
-            bit_idx = 7 - (bx % 8)
-            return bool(self._bitmap_data[byte_idx] & (1 << bit_idx))
-        else:
-            idx = (by * self._bitmap_width + bx) * 3
-            return (self._bitmap_data[idx], self._bitmap_data[idx + 1], self._bitmap_data[idx + 2])
+            return False
+        row_bytes = (self._bitmap_width + 7) // 8
+        byte_idx = by * row_bytes + (bx >> 3)
+        return bool(self._bitmap_data[byte_idx] & (0x80 >> (bx & 7)))
 
-    def _render_bitmap_mono_row(self, y, offset_x):
-        """Render one row of mono bitmap using pixel_span for efficiency."""
-        self._display.set_pen(*self._bitmap_color)
-        span_start = -1
-        for sx in range(self._display.WIDTH):
-            bx = sx - offset_x
-            if 0 <= bx < self._bitmap_width and self._bitmap_get_pixel(bx, y):
-                if span_start < 0:
-                    span_start = sx
-            else:
-                if span_start >= 0:
-                    self._display.pixel_span(span_start, y, sx - span_start)
-                    span_start = -1
-        if span_start >= 0:
-            self._display.pixel_span(span_start, y, self._display.WIDTH - span_start)
-
-    def _render_bitmap_rgb_row(self, y, offset_x):
-        """Render one row of RGB bitmap pixel by pixel."""
-        last_color = None
-        for sx in range(self._display.WIDTH):
-            bx = sx - offset_x
-            if 0 <= bx < self._bitmap_width:
-                c = self._bitmap_get_pixel(bx, y)
-                if c and c != (0, 0, 0):
-                    if c != last_color:
-                        self._display.set_pen(*c)
-                        last_color = c
-                    self._display.draw_pixel(sx, y)
+    # Performance-critical: uses local variables and inlined pixel access
+    # to minimize attribute lookups and method calls per frame.
 
     def _render_bitmap_frame(self, offset_x):
-        """Render bitmap at given x offset."""
+        """Render bitmap at given x offset. Inlined for performance."""
+        display = self._display
+        data = self._bitmap_data
+        bw = self._bitmap_width
+        dw = display.WIDTH
+        dh = display.HEIGHT
+        is_mono = self._bitmap_format == "mono"
+
         # Background
-        if self._bitmap_bg_color != (0, 0, 0):
-            self._display.set_pen(*self._bitmap_bg_color)
-            self._display.draw_rectangle(0, 0, self._display.WIDTH, self._display.HEIGHT)
-        for y in range(self._display.HEIGHT):
-            if self._bitmap_format == "mono":
-                self._render_bitmap_mono_row(y, offset_x)
-            else:
-                self._render_bitmap_rgb_row(y, offset_x)
+        bg = self._bitmap_bg_color
+        if bg != (0, 0, 0):
+            display.set_pen(bg[0], bg[1], bg[2])
+            display.draw_rectangle(0, 0, dw, dh)
+
+        if is_mono:
+            # Set pen once for all rows
+            fc = self._bitmap_color
+            display.set_pen(fc[0], fc[1], fc[2])
+            row_bytes = (bw + 7) // 8
+
+            for y in range(dh):
+                row_base = y * row_bytes
+                span_start = -1
+                for sx in range(dw):
+                    bx = sx - offset_x
+                    # Inline bit test — no method call
+                    if 0 <= bx < bw:
+                        byte_idx = row_base + (bx >> 3)
+                        if data[byte_idx] & (0x80 >> (bx & 7)):
+                            if span_start < 0:
+                                span_start = sx
+                            continue
+                    if span_start >= 0:
+                        display.pixel_span(span_start, y, sx - span_start)
+                        span_start = -1
+                if span_start >= 0:
+                    display.pixel_span(span_start, y, dw - span_start)
+        else:
+            # RGB: inline pixel reads, no tuple allocation
+            last_r = last_g = last_b = -1
+            draw_pixel = display.draw_pixel
+            set_pen = display.set_pen
+
+            for y in range(dh):
+                for sx in range(dw):
+                    bx = sx - offset_x
+                    if 0 <= bx < bw:
+                        idx = (y * bw + bx) * 3
+                        r = data[idx]
+                        g = data[idx + 1]
+                        b = data[idx + 2]
+                        if r | g | b:  # skip black pixels (no tuple creation)
+                            if r != last_r or g != last_g or b != last_b:
+                                set_pen(r, g, b)
+                                last_r, last_g, last_b = r, g, b
+                            draw_pixel(sx, y)
 
     def _render_bitmap_scroll(self):
         """Render scrolling bitmap, advancing 1px per frame."""

@@ -21,18 +21,9 @@ except ImportError:
     import time
 
 
-def _ticks_ms():
-    """Get current ticks in ms, compatible with CPython and MicroPython."""
-    if hasattr(time, "ticks_ms"):
-        return time.ticks_ms()
-    return int(time.time() * 1000)
-
-
-def _ticks_diff(end, start):
-    """Overflow-safe tick difference."""
-    if hasattr(time, "ticks_diff"):
-        return time.ticks_diff(end, start)
-    return end - start
+# Resolve tick functions once at load time (avoids hasattr per call)
+_ticks_ms = getattr(time, "ticks_ms", lambda: int(time.time() * 1000))
+_ticks_diff = getattr(time, "ticks_diff", lambda e, s: e - s)
 
 
 # --- Hardware initialization ---
@@ -175,8 +166,9 @@ def on_schedule_active(schedule):
     # Update message text and color from schedule if set
     msg_text = schedule.get("message", "")
     sched_color = schedule.get("color", {})
+    cur_color = renderer._color
     needs_update = (msg_text and msg_text != renderer._text) or \
-                   (sched_color and sched_color != dict(zip(("r", "g", "b"), renderer._color)))
+                   (sched_color and (sched_color.get("r", 0), sched_color.get("g", 0), sched_color.get("b", 0)) != cur_color)
     if needs_update:
         msg_cfg = dict(_get_msg_config())
         if msg_text:
@@ -264,11 +256,17 @@ renderer.on_scroll_cycle(_update_auto_brightness)
 
 async def display_loop():
     """Continuously render display frames."""
+    import gc
+    frame_count = 0
     while True:
         try:
             renderer.render_frame()
         except Exception as e:
             print("display_loop error:", e)
+        frame_count += 1
+        if frame_count >= 100:
+            gc.collect()
+            frame_count = 0
         interval = renderer.get_scroll_interval_ms()
         await asyncio.sleep_ms(interval)
 
