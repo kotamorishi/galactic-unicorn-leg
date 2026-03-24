@@ -292,26 +292,51 @@ class DisplayRenderer:
             self._pen_dirty = False
 
     def _render_scroll(self):
-        """Render scrolling text, advancing 1px per frame."""
-        self._draw_border()
-        self._ensure_font()
-        self._ensure_pen()
-        self._display.draw_text(self._text, self._scroll_x, self._y_offset)
+        """Render scrolling text, advancing 1px per frame.
+
+        Guards inlined to avoid 3 bound-method allocations per frame.
+        """
+        display = self._display
+        # Inline _draw_border
+        if self._border:
+            display.set_pen(*self._border_color)
+            self._pen_dirty = True
+            display.draw_line(0, 0, display.WIDTH - 1, 0)
+            display.draw_line(0, display.HEIGHT - 1, display.WIDTH - 1, display.HEIGHT - 1)
+        # Inline _ensure_font
+        if not self._font_set:
+            display.set_font(self._get_font_arg())
+            self._font_set = True
+        # Inline _ensure_pen
+        if self._pen_dirty:
+            display.set_pen(*self._color)
+            self._pen_dirty = False
+        display.draw_text(self._text, self._scroll_x, self._y_offset)
 
         self._scroll_x -= 1
-        # Wrap after text has fully exited left + gap
         if self._scroll_x < -self._scroll_cycle:
-            self._scroll_x = self._display.WIDTH
-            # Fire callback at cycle start — right side is clear for sensor
+            self._scroll_x = display.WIDTH
             if self._on_scroll_cycle:
                 self._on_scroll_cycle()
 
     def _render_fixed(self):
-        """Render fixed (non-scrolling) text, centered horizontally."""
-        self._draw_border()
-        self._ensure_font()
-        self._ensure_pen()
-        self._display.draw_text(self._text, self._fixed_x, self._y_offset)
+        """Render fixed (non-scrolling) text, centered horizontally.
+
+        Guards inlined for consistency with _render_scroll.
+        """
+        display = self._display
+        if self._border:
+            display.set_pen(*self._border_color)
+            self._pen_dirty = True
+            display.draw_line(0, 0, display.WIDTH - 1, 0)
+            display.draw_line(0, display.HEIGHT - 1, display.WIDTH - 1, display.HEIGHT - 1)
+        if not self._font_set:
+            display.set_font(self._get_font_arg())
+            self._font_set = True
+        if self._pen_dirty:
+            display.set_pen(*self._color)
+            self._pen_dirty = False
+        display.draw_text(self._text, self._fixed_x, self._y_offset)
 
     # --- Bitmap rendering ---
 
@@ -337,7 +362,7 @@ class DisplayRenderer:
 
         # Background
         bg = self._bitmap_bg_color
-        if bg != (0, 0, 0):
+        if bg[0] | bg[1] | bg[2]:
             display.set_pen(bg[0], bg[1], bg[2])
             display.draw_rectangle(0, 0, dw, dh)
 
@@ -346,11 +371,12 @@ class DisplayRenderer:
             fc = self._bitmap_color
             display.set_pen(fc[0], fc[1], fc[2])
             row_bytes = (bw + 7) // 8
+            x_range = range(dw)
 
             for y in range(dh):
                 row_base = y * row_bytes
                 span_start = -1
-                for sx in range(dw):
+                for sx in x_range:
                     bx = sx - offset_x
                     # Inline bit test — no method call
                     if 0 <= bx < bw:
@@ -369,9 +395,10 @@ class DisplayRenderer:
             last_r = last_g = last_b = -1
             draw_pixel = display.draw_pixel
             set_pen = display.set_pen
+            x_range = range(dw)
 
             for y in range(dh):
-                for sx in range(dw):
+                for sx in x_range:
                     bx = sx - offset_x
                     if 0 <= bx < bw:
                         idx = (y * bw + bx) * 3
