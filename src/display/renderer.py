@@ -59,6 +59,7 @@ class DisplayRenderer:
         self._bitmap_format = "mono"
         self._bitmap_color = (255, 255, 255)
         self._bitmap_bg_color = (0, 0, 0)
+        self._bitmap_bar_color = None
 
     def init(self, skip_hw_init=False):
         if not skip_hw_init:
@@ -158,7 +159,7 @@ class DisplayRenderer:
         """
         self._on_scroll_cycle = callback
 
-    def set_bitmap(self, width, height, fmt, data, color, bg_color, mode, speed):
+    def set_bitmap(self, width, height, fmt, data, color, bg_color, mode, speed, bar_color=None):
         """Set bitmap data for display.
 
         Args:
@@ -170,12 +171,14 @@ class DisplayRenderer:
             bg_color: (r, g, b) background
             mode: "scroll" or "fixed"
             speed: "slow", "medium", "fast"
+            bar_color: optional (r, g, b) for 1px indicator line at top
         """
         self._bitmap_data = data
         self._bitmap_width = width
         self._bitmap_format = fmt
         self._bitmap_color = color
         self._bitmap_bg_color = bg_color
+        self._bitmap_bar_color = bar_color
         self._mode = mode
         self._scroll_speed = speed
         self._scroll_interval_ms = SCROLL_SPEED_MS.get(speed, 50)
@@ -343,6 +346,12 @@ class DisplayRenderer:
         if bg[0] | bg[1] | bg[2]:
             display.set_pen(bg[0], bg[1], bg[2])
             display.draw_rectangle(0, 0, dw, dh)
+
+        # Draw 1px indicator bar at top if bar_color is set
+        bar = self._bitmap_bar_color
+        if bar is not None:
+            display.set_pen(bar[0], bar[1], bar[2])
+            display.pixel_span(0, 0, dw)
 
         if is_mono:
             # Set pen once for all rows

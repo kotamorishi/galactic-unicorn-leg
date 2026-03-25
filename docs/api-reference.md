@@ -300,6 +300,7 @@ Send a pre-rendered bitmap for display. Useful for Japanese text or custom graph
   "format": "mono",
   "color": {"r": 255, "g": 200, "b": 0},
   "bg_color": {"r": 0, "g": 0, "b": 0},
+  "bar_color": {"r": 0, "g": 255, "b": 0},
   "display_mode": "scroll",
   "scroll_speed": "medium",
   "data": "<base64-encoded bitmap>"
@@ -313,6 +314,7 @@ Send a pre-rendered bitmap for display. Useful for Japanese text or custom graph
 | `format` | string | Yes | `"mono"` (1-bit + color) or `"rgb"` (3 bytes/pixel) |
 | `color` | object | mono only | Foreground `{r, g, b}` |
 | `bg_color` | object | No | Background `{r, g, b}` (default: black) |
+| `bar_color` | object | No | 1px indicator line at top of display `{r, g, b}` |
 | `display_mode` | string | No | `"scroll"` or `"fixed"` (default: scroll) |
 | `scroll_speed` | string | No | `"slow"`, `"medium"`, `"fast"` (default: medium) |
 | `data` | string | Yes | Base64-encoded binary bitmap data |

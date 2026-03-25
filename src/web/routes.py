@@ -282,6 +282,7 @@ def register(app):
 
             color = data.get("color", {"r": 255, "g": 255, "b": 255})
             bg = data.get("bg_color", {"r": 0, "g": 0, "b": 0})
+            bar = data.get("bar_color", None)
 
             renderer = app.ctx["display_renderer"]
             renderer.set_bitmap(
@@ -289,6 +290,7 @@ def register(app):
                 (color.get("r", 255), color.get("g", 255), color.get("b", 255)),
                 (bg.get("r", 0), bg.get("g", 0), bg.get("b", 0)),
                 mode, speed,
+                bar_color=(bar.get("r", 0), bar.get("g", 0), bar.get("b", 0)) if bar else None,
             )
             return _json_response({"status": "ok", "width": width, "format": fmt, "mode": mode})
         except Exception as e:
