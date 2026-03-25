@@ -93,6 +93,7 @@ def main():
     parser.add_argument("--speed", default="medium", choices=["slow", "medium", "fast"])
     parser.add_argument("--font", default=None, help="Path to TTF font file")
     parser.add_argument("--size", type=int, default=10, help="Font size (default: 10)")
+    parser.add_argument("--bar", default=None, help="R,G,B bar indicator color (1px top line)")
     parser.add_argument("--clear", action="store_true", help="Clear bitmap, return to text mode")
     args = parser.parse_args()
 
@@ -123,6 +124,10 @@ def main():
         "scroll_speed": args.speed,
         "data": base64.b64encode(bitmap).decode("ascii"),
     }
+
+    if args.bar:
+        bar_r, bar_g, bar_b = [int(x) for x in args.bar.split(",")]
+        payload["bar_color"] = {"r": bar_r, "g": bar_g, "b": bar_b}
 
     resp = requests.post("{}/api/bitmap".format(args.device), json=payload)
     print("Response:", resp.json())
