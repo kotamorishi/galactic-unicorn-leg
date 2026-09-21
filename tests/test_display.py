@@ -483,3 +483,101 @@ class TestFont11:
         data = self._font()
         width = sum(data[2 + ord(c) - 0x20] for c in "HAPPY NEW YEAR")
         assert width / len("HAPPY NEW YEAR") <= 7.0, "font too wide for 53px"
+
+
+CJK_BIN = os.path.join(os.path.dirname(__file__), "..", "src", "display", "cjk11.bin")
+
+
+@pytest.fixture
+def cjk(monkeypatch):
+    """Point cjk_font at the built glyph file (the device runs from src/)."""
+    from display import cjk_font
+    monkeypatch.setattr(cjk_font, "FONT_PATH", CJK_BIN)
+    return cjk_font
+
+
+class TestCJKFont:
+
+    def test_needs_bitmap(self, cjk):
+        assert cjk.needs_bitmap("こんにちは")
+        assert cjk.needs_bitmap("OPEN 営業中")
+        assert not cjk.needs_bitmap("OPEN 9:00-18:00")
+        assert not cjk.needs_bitmap("")
+
+    def test_missing_file_returns_none(self, monkeypatch):
+        from display import cjk_font
+        monkeypatch.setattr(cjk_font, "FONT_PATH", "/nonexistent/cjk11.bin")
+        assert cjk_font.render("あ") is None
+
+    def test_kanji_advance_and_height(self, cjk):
+        """Kanji are 8px wide; 53px panel therefore shows 6 of them."""
+        width, data = cjk.render("本日晴天")
+        assert width == 32
+        assert len(data) == ((width + 7) // 8) * cjk.HEIGHT
+
+    def test_halfwidth_is_narrower(self, cjk):
+        """ASCII inside a Japanese message uses the 4px halfwidth glyphs."""
+        assert cjk.render("A")[0] == 4
+        assert cjk.render("本")[0] == 8
+
+    def test_glyphs_use_the_full_panel_height(self, cjk):
+        """k8x12 at 12pt is 11px tall — row 0 and row 10 must both be lit."""
+        width, data = cjk.render("本日国")
+        row_bytes = (width + 7) // 8
+        assert any(data[0 * row_bytes + i] for i in range(row_bytes)), "top row empty"
+        assert any(data[10 * row_bytes + i] for i in range(row_bytes)), "bottom row empty"
+
+    def test_common_kanji_are_not_blank(self, cjk):
+        """Ark Pixel dropped these; k8x12 carries them. Guards a font swap."""
+        for ch in "藤慶應繊鬱議室曜":
+            width, data = cjk.render(ch)
+            assert any(data), "blank glyph for " + ch
+
+    def test_unknown_codepoint_is_blank_not_a_crash(self, cjk):
+        width, data = cjk.render("￰")
+        assert width == cjk.MISSING_WIDTH
+        assert not any(data)
+
+
+class TestCJKRendering:
+
+    def test_japanese_message_routes_through_bitmap(self, mock_display, cjk):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "本日晴天", "display_mode": "scroll"})
+        assert r._bitmap_data is not None
+        assert r._bitmap_format == "mono"
+        assert r._bitmap_width == 32
+        r.set_active(True)
+        r.render_frame()
+        # Mono bitmaps draw run-length spans; draw_text is never reached
+        assert any(f["type"] == "pixel_span" for f in mock_display.framebuffer)
+        assert not any(f["type"] == "text" for f in mock_display.framebuffer)
+
+    def test_ascii_message_clears_a_previous_bitmap(self, mock_display, cjk):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "営業中", "display_mode": "scroll"})
+        assert r._bitmap_data is not None
+        r.configure({"text": "OPEN", "display_mode": "scroll", "font": "bitmap8"})
+        assert r._bitmap_data is None
+        r.set_active(True)
+        r.render_frame()
+        assert any(f["type"] == "text" for f in mock_display.framebuffer)
+
+    def test_message_colour_carries_into_the_bitmap(self, mock_display, cjk):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({
+            "text": "営業中",
+            "display_mode": "scroll",
+            "color": {"r": 0, "g": 255, "b": 0},
+        })
+        assert r._bitmap_color == (0, 255, 0)
+
+    def test_short_japanese_text_downgrades_to_fixed(self, mock_display, cjk):
+        r = DisplayRenderer(mock_display)
+        r.init()
+        r.configure({"text": "営業", "display_mode": "scroll"})
+        assert r._bitmap_width == 16
+        assert r._effective_mode == "fixed"

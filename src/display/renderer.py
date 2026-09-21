@@ -109,7 +109,36 @@ class DisplayRenderer:
         self._y_offset = (self._display.HEIGHT - fh) // 2
         self._frame_dirty = True
         self._pen_dirty = True
+        if self._configure_cjk():
+            return
+        # Drop any bitmap a previous CJK message (or the bitmap API) left behind
+        self._bitmap_data = None
+        self._bitmap_bar_color = None
         self._reset_scroll()
+
+    def _configure_cjk(self):
+        """Draw non-ASCII text through the bitmap path. True if it took over.
+
+        The PicoGraphics fonts only have 105 glyph slots, so kanji cannot go
+        through draw_text. Composing a mono bitmap instead reuses the scroll,
+        colour and centring logic already in the bitmap renderer.
+        """
+        from display import cjk_font
+
+        if not cjk_font.needs_bitmap(self._text):
+            return False
+        rendered = cjk_font.render(self._text)
+        if rendered is None:
+            return False  # glyph file missing — fall back to draw_text (tofu)
+        width, data = rendered
+        self._bitmap_data = data
+        self._bitmap_width = width
+        self._bitmap_format = "mono"
+        self._bitmap_color = self._color
+        self._bitmap_bg_color = self._bg_color
+        self._bitmap_bar_color = None
+        self._reset_scroll()
+        return True
 
     def _get_font_arg(self):
         """Return the font argument for set_font (string or bytearray)."""
@@ -120,6 +149,13 @@ class DisplayRenderer:
     def _reset_scroll(self):
         """Reset scroll position and cache layout calculations."""
         self._scroll_x = self._display.WIDTH
+        if self._bitmap_data is not None:
+            # Bitmap mode carries its own width; measure_text does not apply to it
+            self._scroll_cycle = self._bitmap_width + SCROLL_GAP
+            self._effective_mode = self._mode
+            if self._mode == "scroll" and self._bitmap_width <= self._display.WIDTH:
+                self._effective_mode = "fixed"
+            return
         self._display.set_font(self._get_font_arg())
         self._font_set = True
         self._text_width = self._display.measure_text(self._text, 1)

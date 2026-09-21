@@ -26,3 +26,5 @@ wifi_config.json
 *.otf
 # Handjet is SIL Open Font License — safe to redistribute (see Handjet-OFL.txt)
 !Handjet.ttf
+# k8x12 is free for any use incl. redistribution (see k8x12-LICENSE.txt)
+!k8x12.ttf

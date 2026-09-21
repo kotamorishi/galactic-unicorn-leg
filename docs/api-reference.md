@@ -534,7 +534,8 @@ PicoGraphics built-in fonts. 105 characters total:
 
 Includes: `A-Z`, `a-z`, `0-9`, and symbols: `` !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ ``
 
-**Not supported:** Japanese (漢字, ひらがな, カタカナ), Chinese, Korean, emoji, accented characters beyond the 10 extended above.
+**Not supported:** Chinese, Korean, emoji, accented characters beyond the 10 extended above.
+Japanese does not go through these fonts at all — see *Japanese* below.
 
 #### Custom font: `font11`
 
@@ -550,6 +551,31 @@ Regenerate with:
 
 ```bash
 cd tools && python3 ttf_to_picographics.py ../Handjet.ttf 11 --upper > ../src/display/font11.bin
+```
+
+#### Japanese (automatic)
+
+Any message containing a character above U+007E is composed into a mono bitmap
+from `display/cjk11.bin` and drawn through the bitmap renderer, because
+PicoGraphics `font_t` only has 105 glyph slots. No configuration and no `font`
+setting is involved — send Japanese text to `POST /api/message` and it renders.
+
+- Font: [k8x12](https://littlelimit.net/k8x12.htm) at 12pt — **11px tall**, the
+  full panel height
+- Coverage: 7,170 glyphs, 6,356 kanji (JIS 第1・第2水準), kana, halfwidth forms
+- Advance: **8px** for kanji and kana, **4px** for halfwidth — so about
+  **6 kanji are visible at once** on the 53px panel. Use `scroll` for anything longer
+- The `font` setting is ignored for these messages; colour, background, border,
+  mode and speed all still apply
+- Characters the font lacks render as blank, not as a crash
+
+Composition runs once when the message changes (a binary search per character
+over the glyph file), never inside the frame loop.
+
+Regenerate the glyph file with:
+
+```bash
+cd tools && python3 ttf_to_cjk.py ../k8x12.ttf 12 11 > ../src/display/cjk11.bin
 ```
 
 ### Bitmap mode (`POST /api/bitmap`)
