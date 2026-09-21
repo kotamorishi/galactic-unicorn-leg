@@ -4,7 +4,12 @@ Rasterizes the font at the target pixel height using Pillow,
 then encodes as column-major bitmap data for PicoGraphics.
 
 Usage:
-  python3 ttf_to_picographics.py <font.ttf> [height] > ../src/display/font11_data.py
+  python3 ttf_to_picographics.py <font.ttf> [height] [--upper] > ../src/display/font11.bin
+
+--upper sizes the font so CAPITALS fill the full height and maps a-z to the
+uppercase glyphs. For a 53x11 LED sign this buys ~3px of glyph height over
+mixed-case fitting. Glyphs that overflow that box (Q, parens, @, /) are
+re-rendered one size down so they stay legible instead of being cropped.
 """
 
 import sys
@@ -17,11 +22,13 @@ EXTENDED_CODEPOINTS = [
 ]
 NUM_CHARS = 95 + len(EXTENDED_CODEPOINTS)
 
+# Reference glyphs for --upper sizing: no descenders, no Q tail
+CAPS_REF = "HEXOB05"
+LOWER_TO_UPPER = {0x00E6: 0x00C6, 0x00F8: 0x00D8, 0x00E5: 0x00C5, 0x00FE: 0x00DE}
 
-def find_font_size(ttf_path, target_height):
-    """Find the largest font point size whose tallest glyph fits in target_height."""
-    # Test all ASCII chars to find the global bounding box
-    test_chars = "".join(chr(c) for c in range(0x21, 0x7F))  # all printable ASCII
+
+def find_font_size(ttf_path, target_height, test_chars):
+    """Find the largest font point size whose tallest test glyph fits in target_height."""
     for sz in range(target_height * 3, 0, -1):
         font = ImageFont.truetype(ttf_path, sz)
         img = Image.new("L", (len(test_chars) * sz, sz * 3), 0)
@@ -35,9 +42,8 @@ def find_font_size(ttf_path, target_height):
     return 1, ImageFont.truetype(ttf_path, 1)
 
 
-def measure_global_metrics(font, target_height):
-    """Measure the global top and bottom of all glyphs for consistent baseline."""
-    test_chars = "".join(chr(c) for c in range(0x21, 0x7F))
+def measure_global_metrics(font, target_height, test_chars):
+    """Measure the global top and bottom of the reference glyphs for a consistent baseline."""
     canvas_h = target_height * 3
     img = Image.new("L", (len(test_chars) * canvas_h, canvas_h), 0)
     draw = ImageDraw.Draw(img)
@@ -63,10 +69,11 @@ def rasterize_glyph(font, char, target_height, global_top, global_bottom):
     bbox = img.getbbox()
     if bbox is None:
         space_w = max(target_height // 3, 2)
-        return space_w, [[0] * space_w for _ in range(target_height)]
+        return space_w, [[0] * space_w for _ in range(target_height)], False
 
-    left, _, right, _ = bbox
+    left, ink_top, right, ink_bottom = bbox
     glyph_w = right - left
+    clipped = ink_top < global_top or ink_bottom > global_top + target_height
 
     # Extract glyph pixels with global vertical alignment
     width = glyph_w + 1  # +1 for spacing
@@ -82,7 +89,37 @@ def rasterize_glyph(font, char, target_height, global_top, global_bottom):
                 row.append(0)
         grid.append(row)
 
-    return width, grid
+    return width, grid, clipped
+
+
+def rasterize_fitted(ttf_path, char, target_height, max_size):
+    """Render one glyph at the largest size that fits target_height, ink-centred.
+
+    Used for glyphs the main size would crop (Q's tail, brackets, @, /).
+    Never goes above max_size, or short glyphs like "_" would balloon in width.
+    """
+    canvas_sz = target_height * 4
+    for sz in range(max_size, 0, -1):
+        font = ImageFont.truetype(ttf_path, sz)
+        img = Image.new("L", (canvas_sz, canvas_sz), 0)
+        ImageDraw.Draw(img).text((0, 0), char, fill=255, font=font)
+        bbox = img.getbbox()
+        if bbox is None:
+            continue
+        left, top, right, bottom = bbox
+        if bottom - top > target_height:
+            continue
+        width = right - left + 1
+        pad = (target_height - (bottom - top)) // 2
+        grid = []
+        for y in range(target_height):
+            src_y = top - pad + y
+            grid.append([
+                1 if 0 <= src_y < canvas_sz and img.getpixel((left + x, src_y)) > 127 else 0
+                for x in range(width)
+            ])
+        return width, grid
+    raise ValueError("no size fits {!r}".format(char))
 
 
 def grid_to_columns(grid, width, height):
@@ -106,13 +143,18 @@ def main():
         print("Usage: python3 ttf_to_picographics.py <font.ttf> [height]", file=sys.stderr)
         sys.exit(1)
 
-    ttf_path = sys.argv[1]
-    target_height = int(sys.argv[2]) if len(sys.argv) > 2 else 11
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    upper_only = "--upper" in sys.argv
 
-    sz, font = find_font_size(ttf_path, target_height)
-    print("# Font size: {}pt for {}px target".format(sz, target_height), file=sys.stderr)
+    ttf_path = args[0]
+    target_height = int(args[1]) if len(args) > 1 else 11
 
-    global_top, global_bottom = measure_global_metrics(font, target_height)
+    ref_chars = CAPS_REF if upper_only else "".join(chr(c) for c in range(0x21, 0x7F))
+    sz, font = find_font_size(ttf_path, target_height, ref_chars)
+    print("# Font size: {}pt for {}px target (upper_only={})".format(
+        sz, target_height, upper_only), file=sys.stderr)
+
+    global_top, global_bottom = measure_global_metrics(font, target_height, ref_chars)
     print("# Global metrics: top={}, bottom={}, height={}".format(
         global_top, global_bottom, global_bottom - global_top), file=sys.stderr)
 
@@ -120,10 +162,26 @@ def main():
 
     glyphs = {}
     max_width = 0
+    refit = []
     for cp in codepoints:
-        w, grid = rasterize_glyph(font, chr(cp), target_height, global_top, global_bottom)
+        w, grid, clipped = rasterize_glyph(
+            font, chr(cp), target_height, global_top, global_bottom)
+        if clipped:
+            w, grid = rasterize_fitted(ttf_path, chr(cp), target_height, sz)
+            refit.append(chr(cp))
         glyphs[cp] = (w, grid)
         max_width = max(max_width, w)
+
+    if refit:
+        print("# Re-fitted (would have been cropped): {}".format("".join(refit)),
+              file=sys.stderr)
+
+    if upper_only:
+        for cp in range(ord("a"), ord("z") + 1):
+            glyphs[cp] = glyphs[cp - 32]
+        for lo, up in LOWER_TO_UPPER.items():
+            glyphs[lo] = glyphs[up]
+        max_width = max(w for w, _ in glyphs.values())
 
     print("# Max width: {}px, {} chars".format(max_width, len(codepoints)), file=sys.stderr)
 
@@ -149,22 +207,7 @@ def main():
         for row in grid:
             print("#   " + "".join("#" if p else "." for p in row[:w]), file=sys.stderr)
 
-    # Output
-    print('"""Custom font {}px - auto-generated from TTF. Do not edit."""'.format(target_height))
-    print("")
-    print("FONT_11 = bytearray([")
-    for i in range(0, len(data), 16):
-        chunk = data[i:i + 16]
-        hex_str = ", ".join("0x{:02X}".format(b) for b in chunk)
-        trail = "," if i + 16 < len(data) else ""
-        print("    {}{}".format(hex_str, trail))
-    print("])")
-
-    # Also write binary
-    bin_path = ttf_path.rsplit(".", 1)[0] + "_{}px.bin".format(target_height)
-    with open(bin_path, "wb") as f:
-        f.write(data)
-    print("# Binary: {} ({} bytes)".format(bin_path, len(data)), file=sys.stderr)
+    sys.stdout.buffer.write(data)
 
 
 if __name__ == "__main__":

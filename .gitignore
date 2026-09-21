@@ -24,3 +24,5 @@ wifi_config.json
 # Font source files (license restrictions)
 *.ttf
 *.otf
+# Handjet is SIL Open Font License — safe to redistribute (see Handjet-OFL.txt)
+!Handjet.ttf

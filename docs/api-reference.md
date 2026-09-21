@@ -538,11 +538,19 @@ Includes: `A-Z`, `a-z`, `0-9`, and symbols: `` !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ 
 
 #### Custom font: `font11`
 
-8-Bit Wonder font (11px, fills full display height). Same 105 character slots as built-in fonts, but:
+Handjet (OFL) rasterized at 17pt, 11px — capitals fill the full display height.
+Same 105 character slots as built-in fonts, but:
 
 - **Uppercase only** — lowercase input `a-z` is automatically displayed as `A-Z`
 - Digits `0-9` and common symbols are supported
+- Roughly 6px per character, so ~8-9 characters are visible at once on the 53px panel
 - Extended characters (Æ, ©, ° etc.) may render as uppercase equivalents
+
+Regenerate with:
+
+```bash
+cd tools && python3 ttf_to_picographics.py ../Handjet.ttf 11 --upper > ../src/display/font11.bin
+```
 
 ### Bitmap mode (`POST /api/bitmap`)
 
