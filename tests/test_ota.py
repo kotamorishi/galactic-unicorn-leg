@@ -101,7 +101,7 @@ class TestFileUpdate:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.text = "print('hello')"
+        mock_response.content = b"print('hello')"
         mock_response.close = MagicMock()
 
         import os
@@ -118,6 +118,32 @@ class TestFileUpdate:
         finally:
             os.chdir(original_cwd)
 
+    def test_update_file_preserves_binary_bytes(self, mock_system, temp_dir):
+        """font11.bin and cjk11.bin go through OTA; text mode would mangle them."""
+        updater = OTAUpdater(mock_system)
+        updater._ota_config = {
+            "repo": "user/repo", "branch": "main", "app_path": "src/",
+        }
+
+        # Bytes that a text-mode round trip does not survive
+        blob = bytes(range(256)) + b"\r\n\x00\xff"
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = blob
+        mock_response.close = MagicMock()
+
+        import os
+        original_cwd = os.getcwd()
+        os.chdir(str(temp_dir))
+        try:
+            with patch("ota.updater.requests") as mock_requests:
+                mock_requests.get.return_value = mock_response
+                assert updater._update_file("display/font11.bin") is True
+            with open("display/font11.bin", "rb") as f:
+                assert f.read() == blob
+        finally:
+            os.chdir(original_cwd)
+
     def test_update_file_creates_directories(self, mock_system, temp_dir):
         updater = OTAUpdater(mock_system)
         updater._ota_config = {
@@ -126,7 +152,7 @@ class TestFileUpdate:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.text = "content"
+        mock_response.content = b"content"
         mock_response.close = MagicMock()
 
         import os
@@ -150,7 +176,7 @@ class TestFileUpdate:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.text = ""
+        mock_response.content = b""
         mock_response.close = MagicMock()
 
         import os

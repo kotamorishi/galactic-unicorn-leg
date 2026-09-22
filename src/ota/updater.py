@@ -195,7 +195,9 @@ class OTAUpdater:
             if resp.status_code != 200:
                 return False
 
-            content = resp.text
+            # Bytes, not resp.text: the manifest carries binary files
+            # (display/font11.bin, display/cjk11.bin) that text mode corrupts.
+            content = resp.content
 
             if not content or len(content) == 0:
                 return False
@@ -207,7 +209,7 @@ class OTAUpdater:
 
             # Safe write: tmp + rename
             tmp_path = file_path + ".tmp"
-            with open(tmp_path, "w") as f:
+            with open(tmp_path, "wb") as f:
                 f.write(content)
 
             try:
