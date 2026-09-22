@@ -93,3 +93,34 @@ class TestPresetAPI:
         lst = get_preset_list()
         ids = [p["id"] for p in lst]
         assert ids == sorted(ids)
+
+
+class TestRepeatCount:
+    """/api/sound/preview and /api/call pass count=; the signature must accept it."""
+
+    def test_play_preset_accepts_count(self):
+        import inspect
+        from audio.player import AudioPlayer
+        params = inspect.signature(AudioPlayer.play_preset).parameters
+        assert "count" in params, "routes.py calls play_preset(count=...)"
+
+    def test_count_repeats_the_sequence(self, mock_audio):
+        import asyncio
+        from audio.player import AudioPlayer
+        from audio.presets import get_preset
+
+        notes = len(get_preset(1)["notes"])
+        p = AudioPlayer(mock_audio)
+        p.init()
+        asyncio.new_event_loop().run_until_complete(
+            p.play_preset(1, 50, count=3, gap_ms=0)
+        )
+        assert len(mock_audio.play_log) == notes * 3
+
+    def test_unknown_preset_is_a_no_op(self, mock_audio):
+        import asyncio
+        from audio.player import AudioPlayer
+        p = AudioPlayer(mock_audio)
+        p.init()
+        asyncio.new_event_loop().run_until_complete(p.play_preset(9999, 50))
+        assert mock_audio.play_log == []
