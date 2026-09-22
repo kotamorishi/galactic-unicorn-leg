@@ -150,21 +150,32 @@ class TestScheduler:
         assert len(active_schedules) == 0
 
     def test_day_filter(self, mock_system):
-        # Saturday (weekday=5), but schedule only on weekdays
-        mock_system.set_rtc_time((2026, 3, 21, 5, 23, 30, 0, 0))  # UTC weekday=5 (Sat)
+        """The day filter must use the LOCAL weekday, not the RTC's UTC one.
+
+        RTC tuple is machine.RTC order: (year, month, day, weekday, h, m, s).
+        """
+        weekdays = ["mon", "tue", "wed", "thu", "fri"]
+
+        # UTC Sat 23:30 -> JST Sun 08:30. A weekday-only schedule must NOT fire.
+        mock_system.set_rtc_time((2026, 3, 21, 5, 23, 30, 0, 0))
         s = Scheduler(mock_system)
         s.set_timezone_offset(9)
-        s.set_schedules([self._make_schedule(
-            start="08:00", end="09:00",
-            days=["mon", "tue", "wed", "thu", "fri"],
-        )])
-
+        s.set_schedules([self._make_schedule(start="08:00", end="09:00", days=weekdays)])
         active = []
         s.on_schedule_active(lambda sched: active.append(sched))
+        s.check()
+        assert active == [], "fired on the local Sunday"
 
-        # After timezone adjustment weekday may change, but let's test the mechanism
-        result = s.check()
-        # The exact result depends on weekday after timezone adjustment
+        # UTC Sun 23:30 -> JST Mon 08:30. The same schedule MUST fire; this is
+        # what fails if the UTC weekday is used instead of the rolled-over one.
+        mock_system.set_rtc_time((2026, 3, 22, 6, 23, 30, 0, 0))
+        s2 = Scheduler(mock_system)
+        s2.set_timezone_offset(9)
+        s2.set_schedules([self._make_schedule(start="08:00", end="09:00", days=weekdays)])
+        active2 = []
+        s2.on_schedule_active(lambda sched: active2.append(sched))
+        s2.check()
+        assert len(active2) == 1, "day filter used the UTC weekday (Sun), not local Mon"
 
     def test_multiple_schedules(self, mock_system):
         mock_system.set_rtc_time((2026, 3, 21, 0, 23, 30, 0, 0))  # UTC 23:30, JST 08:30, Mon(0)

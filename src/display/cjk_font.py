@@ -10,7 +10,21 @@ with seek() and needs no RAM index. That costs ~log2(7170) = 13 reads per
 character, but it runs once when the message changes, never inside the frame loop.
 """
 
-FONT_PATH = "display/cjk11.bin"
+
+def _data_dir():
+    """Directory holding the font binaries, independent of cwd.
+
+    MicroPython sets __file__ for filesystem modules; tools/preview_server.py
+    and the tests chdir() into a temp dir, which used to make these paths miss.
+    """
+    try:
+        f = __file__.replace("\\", "/")
+        return f.rsplit("/", 1)[0] if "/" in f else "display"
+    except (NameError, AttributeError):  # pragma: no cover
+        return "display"
+
+
+FONT_PATH = _data_dir() + "/cjk11.bin"
 HEIGHT = 11
 MAX_WIDTH = 8
 RECORD = 3 + MAX_WIDTH * 2

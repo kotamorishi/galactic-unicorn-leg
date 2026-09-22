@@ -18,9 +18,21 @@ def file_exists(path):
 
 
 def safe_write_json(path, data):
-    """Write JSON data atomically via tmp file + rename."""
-    tmp_path = path + ".tmp"
+    """Write JSON data atomically via tmp file + rename.
+
+    Skips the write when the file already holds exactly this content: flash is
+    good for ~100K erase cycles, and holding a brightness button used to rewrite
+    the whole config every 2 seconds whether or not anything changed.
+    Returns True if it wrote.
+    """
     raw = json.dumps(data)
+    try:
+        with open(path, "r") as f:
+            if f.read() == raw:
+                return False
+    except OSError:
+        pass
+    tmp_path = path + ".tmp"
     with open(tmp_path, "w") as f:
         f.write(raw)
     try:
@@ -29,6 +41,7 @@ def safe_write_json(path, data):
         if file_exists(path):
             os.remove(path)
         os.rename(tmp_path, path)
+    return True
 
 
 def safe_read_json(path, default=None):

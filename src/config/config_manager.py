@@ -84,19 +84,30 @@ def _clamp(value, min_val, max_val):
     return value
 
 
+def _as_int(value, default):
+    """int() that cannot raise. Config values come from a hand-editable file and
+    from the web API, and neither may defeat the "returns defaults" contract."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _validate_color(color):
     """Validate and sanitize an RGB color dict."""
     if not isinstance(color, dict):
         return {"r": 255, "g": 255, "b": 255}
     return {
-        "r": _clamp(int(color.get("r", 255)), 0, 255),
-        "g": _clamp(int(color.get("g", 255)), 0, 255),
-        "b": _clamp(int(color.get("b", 255)), 0, 255),
+        "r": _clamp(_as_int(color.get("r"), 255), 0, 255),
+        "g": _clamp(_as_int(color.get("g"), 255), 0, 255),
+        "b": _clamp(_as_int(color.get("b"), 255), 0, 255),
     }
 
 
-def _validate_schedule(sched):
+def _validate_schedule(sched, fallback_id=0):
     """Validate and sanitize a single schedule entry."""
+    if not isinstance(sched, dict):
+        sched = {}
     text = str(sched.get("message", ""))
     if len(text) > 128:
         text = text[:128]
@@ -104,7 +115,10 @@ def _validate_schedule(sched):
     # Preserve empty color as "not set" (use global message color)
     has_color = isinstance(color, dict) and any(color.get(k, 0) for k in ("r", "g", "b"))
     validated = {
-        "id": int(sched.get("id", 0)),
+        # A missing id used to become 0 for every schedule, and the scheduler
+        # tracks "which one already started" by id, so the second one's sound
+        # never fired.
+        "id": _as_int(sched.get("id"), fallback_id),
         "enabled": bool(sched.get("enabled", True)),
         "start_time": _validate_time_str(sched.get("start_time", "00:00")),
         "end_time": _validate_time_str(sched.get("end_time", "23:59")),
@@ -144,8 +158,8 @@ def _validate_sound(sound):
         return {"enabled": False, "preset_id": 1, "volume": 50}
     return {
         "enabled": bool(sound.get("enabled", False)),
-        "preset_id": _clamp(int(sound.get("preset_id", 1)), 1, 20),
-        "volume": _clamp(int(sound.get("volume", 50)), 0, 100),
+        "preset_id": _clamp(_as_int(sound.get("preset_id"), 1), 1, 20),
+        "volume": _clamp(_as_int(sound.get("volume"), 50), 0, 100),
     }
 
 
@@ -187,19 +201,34 @@ def _validate_app_config(config):
     schedules = merged.get("schedules", [])
     if not isinstance(schedules, list):
         schedules = []
-    merged["schedules"] = [_validate_schedule(s) for s in schedules]
+    merged["schedules"] = [
+        _validate_schedule(s, i + 1) for i, s in enumerate(schedules)
+    ]
     system = merged.get("system", {})
     if not isinstance(system, dict):
         system = {}
     merged["system"] = {
-        "brightness": _clamp(int(system.get("brightness", 50)), 0, 100),
-        "brightness_offset": _clamp(int(system.get("brightness_offset", 0)), -50, 50),
-        "timezone_offset": _clamp(int(system.get("timezone_offset", 9)), -12, 14),
+        "brightness": _clamp(_as_int(system.get("brightness"), 50), 0, 100),
+        "brightness_offset": _clamp(_as_int(system.get("brightness_offset"), 0), -50, 50),
+        "timezone_offset": _clamp(_as_int(system.get("timezone_offset"), 9), -12, 14),
     }
     return merged
 
 
 # --- Public API ---
+
+def clamp_int(value, low, high, default):
+    """Clamp client input to [low, high]. Never raises; `default` on garbage."""
+    n = _as_int(value, None)
+    if n is None:
+        return default
+    return _clamp(n, low, high)
+
+
+def clamp_volume(value):
+    """Clamp a 0-100 volume from client input. Never raises."""
+    return clamp_int(value, 0, 100, 50)
+
 
 def _wifi_credentials(ssid, password):
     """Coerce credentials to the shape network.WLAN.connect() accepts.

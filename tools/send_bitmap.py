@@ -16,6 +16,7 @@ Font:
 """
 
 import argparse
+import sys
 import base64
 import os
 import requests
@@ -33,6 +34,13 @@ def render_to_mono_bitmap(text, font_path, font_size=10):
     bbox = font.getbbox(text)
     text_width = bbox[2] - bbox[0] + 2
     text_height = bbox[3] - bbox[1]
+
+    if text_height > DISPLAY_HEIGHT:
+        print(
+            "warning: text is {}px tall, panel is {}px - it will be cropped. "
+            "Try --size {}.".format(text_height, DISPLAY_HEIGHT, font_size - 1),
+            file=sys.stderr,
+        )
 
     # Render to 1-bit image
     img = Image.new("1", (text_width, DISPLAY_HEIGHT), 0)

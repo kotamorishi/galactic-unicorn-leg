@@ -35,11 +35,14 @@ class CaptiveDNS:
         header += b"\x00\x00"  # Authority RRs
         header += b"\x00\x00"  # Additional RRs
 
-        # Copy the question section
+        # Copy the question section. A truncated or malformed name used to walk
+        # off the end of the buffer and raise IndexError, which killed the task.
         qn_end = 12
-        while request[qn_end] != 0:
+        while qn_end < len(request) and request[qn_end] != 0:
             qn_end += request[qn_end] + 1
         qn_end += 5  # null byte + qtype(2) + qclass(2)
+        if qn_end > len(request):
+            return None
         question = request[12:qn_end]
 
         # Answer section: pointer to name in question + A record
@@ -66,9 +69,14 @@ class CaptiveDNS:
                 data, addr = self._sock.recvfrom(256)
                 if data and len(data) > 12:
                     response = self._build_response(data)
-                    self._sock.sendto(response, addr)
+                    if response:
+                        self._sock.sendto(response, addr)
             except OSError:
                 pass
+            except Exception as e:
+                # One bad packet must never take the captive portal down for
+                # good — it is the only way to configure an unprovisioned device.
+                print("captive_dns error:", e)
             await asyncio.sleep_ms(50)
 
     def stop(self):

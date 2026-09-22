@@ -489,10 +489,9 @@ CJK_BIN = os.path.join(os.path.dirname(__file__), "..", "src", "display", "cjk11
 
 
 @pytest.fixture
-def cjk(monkeypatch):
-    """Point cjk_font at the built glyph file (the device runs from src/)."""
+def cjk():
+    """cjk_font resolves its glyph file from the module, so cwd does not matter."""
     from display import cjk_font
-    monkeypatch.setattr(cjk_font, "FONT_PATH", CJK_BIN)
     return cjk_font
 
 
@@ -503,6 +502,19 @@ class TestCJKFont:
         assert cjk.needs_bitmap("OPEN 営業中")
         assert not cjk.needs_bitmap("OPEN 9:00-18:00")
         assert not cjk.needs_bitmap("")
+
+    def test_font_paths_survive_a_chdir(self, tmp_path):
+        """preview_server and the tests chdir(); device-relative paths missed."""
+        import os
+        from display import cjk_font, font11_data
+
+        cwd = os.getcwd()
+        os.chdir(str(tmp_path))
+        try:
+            assert cjk_font.render("本") is not None
+            assert len(font11_data.get_font()) > 0
+        finally:
+            os.chdir(cwd)
 
     def test_missing_file_returns_none(self, monkeypatch):
         from display import cjk_font

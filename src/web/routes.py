@@ -2,7 +2,7 @@
 
 import gc
 from config import config_manager
-from audio.presets import get_preset_list
+from audio.presets import get_preset, get_preset_list
 from lib.microdot import Response
 from web.templates import render_main_page, render_settings_page, render_setup_page
 from web.templates import STATIC_DIR, STATIC_FILES
@@ -19,6 +19,20 @@ def _json_response(data, status=200):
 
 def _html(generator):
     return generator, 200, {"Content-Type": "text/html"}
+
+
+def _sound_args(data):
+    """Validate a sound request. Returns (preset_id, volume, count, error).
+
+    get_preset() is keyed by int, so an unvalidated "3" from JSON used to look
+    up nothing, play nothing, and still answer 200 ok.
+    """
+    preset_id = config_manager.clamp_int(data.get("preset_id", 1), 1, 20, None)
+    if preset_id is None or get_preset(preset_id) is None:
+        return None, None, None, "Unknown preset_id"
+    volume = config_manager.clamp_volume(data.get("volume", 50))
+    count = config_manager.clamp_int(data.get("count", 1), 1, 10, 1)
+    return preset_id, volume, count, None
 
 
 def register(app):
@@ -165,9 +179,9 @@ def register(app):
             data = req.json
             if data is None:
                 return _json_response({"error": "Invalid JSON"}, 400)
-            preset_id = data.get("preset_id", 1)
-            volume = data.get("volume", 50)
-            count = min(10, max(1, int(data.get("count", 1))))
+            preset_id, volume, count, err = _sound_args(data)
+            if err:
+                return _json_response({"error": err}, 400)
             await app.ctx["audio_player"].play_preset(preset_id, volume, count=count)
             return _json_response({"status": "ok"})
         except Exception as e:
@@ -183,9 +197,9 @@ def register(app):
         """
         try:
             data = req.json or {}
-            preset_id = data.get("preset_id", 1)
-            volume = data.get("volume", 50)
-            count = min(10, max(1, int(data.get("count", 1))))
+            preset_id, volume, count, err = _sound_args(data)
+            if err:
+                return _json_response({"error": err}, 400)
             show_alert = app.ctx.get("show_alert")
             if show_alert:
                 show_alert()  # non-blocking: sets up the display, auto-restores later
@@ -205,10 +219,12 @@ def register(app):
             data = req.json
             if data is None:
                 return _json_response({"error": "Invalid JSON"}, 400)
-            offset = data.get("brightness_offset", 0)
             config = config_manager.load_app_config()
-            config["system"]["brightness_offset"] = offset
-            config_manager.save_app_config(config)
+            config["system"]["brightness_offset"] = data.get("brightness_offset", 0)
+            saved = config_manager.save_app_config(config)
+            # The clamped value, not the raw one: runtime and flash must not
+            # disagree, and a bad type here used to reach the hardware.
+            offset = saved["system"]["brightness_offset"]
             app.ctx["set_brightness_offset"](offset)
             app.ctx["update_auto_brightness"]()
             return _json_response({"brightness_offset": offset})
@@ -222,12 +238,13 @@ def register(app):
             data = req.json
             if data is None:
                 return _json_response({"error": "Invalid JSON"}, 400)
-            tz = data.get("timezone_offset", 9)
             config = config_manager.load_app_config()
-            config["system"]["timezone_offset"] = tz
+            config["system"]["timezone_offset"] = data.get("timezone_offset", 9)
             saved = config_manager.save_app_config(config)
+            # An unvalidated offset here broke the scheduler until reboot
+            tz = saved["system"]["timezone_offset"]
             app.ctx["scheduler"].set_timezone_offset(tz)
-            return _json_response({"timezone_offset": saved["system"]["timezone_offset"]})
+            return _json_response({"timezone_offset": tz})
         except Exception as e:
             print("api_set_timezone error:", e)
             return _json_response({"error": str(e)}, 500)
@@ -238,7 +255,7 @@ def register(app):
             data = req.json
             if data is None:
                 return _json_response({"error": "Invalid JSON"}, 400)
-            volume = data.get("volume", 50)
+            volume = config_manager.clamp_volume(data.get("volume", 50))
             app.ctx["audio_player"]._audio.set_volume(volume / 100.0)
             return _json_response({"volume": volume})
         except Exception as e:
