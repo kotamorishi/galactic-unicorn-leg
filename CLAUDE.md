@@ -125,11 +125,13 @@ galactic-unicorn-leg/
 - Use `ujson` (MicroPython built-in) for JSON operations
 
 ### Web UI
-- HTML/CSS/JS must be minimal — every byte counts against RAM/Flash
-- Inline critical CSS, no external CSS frameworks
+- Pages are small HTML shells (`web/templates.py`) that embed their data as `window.D` JSON
+- Styling and behaviour live in `web/static/app.css` and `web/static/app.js`, served by `/static/<name>` (whitelist) with a long `Cache-Control` and a `?v=` cache-buster (OTA version + file sizes)
+- New static files must be added to `STATIC_FILES` in `templates.py` and to `manifest.json`; keep them plain ASCII (OTA writes them as text)
+- No external CSS/JS frameworks or CDNs — the setup page must work offline in AP mode
 - Use vanilla JS only — no frameworks
-- Compress where possible — minify HTML before deploying
 - API endpoints return JSON; pages return minimal HTML
+- Preview locally with the real app + mock HAL: `python tools/preview_server.py` → http://localhost:8080
 
 ### Naming Conventions
 - Files: `snake_case.py`

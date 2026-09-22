@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "files": [
     "main.py",
     "boot.py",
@@ -27,6 +27,8 @@
     "web/server.py",
     "web/routes.py",
     "web/templates.py",
+    "web/static/app.css",
+    "web/static/app.js",
     "ota/__init__.py",
     "ota/updater.py",
     "lib/__init__.py",

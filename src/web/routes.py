@@ -3,7 +3,13 @@
 import gc
 from config import config_manager
 from audio.presets import get_preset_list
+from lib.microdot import Response
 from web.templates import render_main_page, render_settings_page, render_setup_page
+from web.templates import STATIC_DIR, STATIC_FILES
+
+# Static assets are requested with a ?v=<tag> cache-buster (see
+# templates.asset_tag), so browsers may keep them for a long time.
+STATIC_MAX_AGE = 30 * 24 * 3600
 
 
 def _json_response(data, status=200):
@@ -28,6 +34,7 @@ def register(app):
             presets = get_preset_list()
             scheduler = app.ctx["scheduler"]
             status = _get_display_status(scheduler, config)
+            _add_time(scheduler, status)
             return _html(render_main_page(config, presets, status))
 
         except Exception as e:
@@ -50,6 +57,19 @@ def register(app):
         except Exception:
             networks = []
         return _html(render_setup_page(networks))
+
+    # --- Static assets (whitelisted; never build paths from user input) ---
+
+    @app.route("/static/<name>")
+    async def static_file(req, name):
+        ctype = STATIC_FILES.get(name)
+        if ctype is None:
+            return "Not found", 404, {"Content-Type": "text/plain"}
+        try:
+            return Response.send_file(STATIC_DIR + "/" + name, content_type=ctype,
+                                      max_age=STATIC_MAX_AGE)
+        except OSError:
+            return "Not found", 404, {"Content-Type": "text/plain"}
 
     # --- Captive portal detection ---
     # iOS/macOS
@@ -82,15 +102,7 @@ def register(app):
         config = config_manager.load_app_config()
         scheduler = app.ctx["scheduler"]
         status = _get_display_status(scheduler, config)
-        # Add server time
-        try:
-            _, _, _, weekday, hour, minute, second = scheduler.get_current_time()
-            day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            status["time"] = "{:02d}:{:02d}:{:02d}".format(hour, minute, second)
-            status["day"] = day_names[weekday]
-        except Exception:
-            status["time"] = "--:--:--"
-            status["day"] = ""
+        _add_time(scheduler, status)
         # Include brightness offset for Web UI sync
         if "get_brightness_offset" in app.ctx:
             status["brightness_offset"] = app.ctx["get_brightness_offset"]()
@@ -155,10 +167,32 @@ def register(app):
                 return _json_response({"error": "Invalid JSON"}, 400)
             preset_id = data.get("preset_id", 1)
             volume = data.get("volume", 50)
-            await app.ctx["audio_player"].play_preset(preset_id, volume)
+            count = min(10, max(1, int(data.get("count", 1))))
+            await app.ctx["audio_player"].play_preset(preset_id, volume, count=count)
             return _json_response({"status": "ok"})
         except Exception as e:
             print("api_preview_sound error:", e)
+            return _json_response({"error": str(e)}, 500)
+
+    @app.route("/api/call", methods=["POST"])
+    async def api_call(req):
+        """Ring the sound AND flash a temporary alert message on the LED.
+
+        Used by the ESP32 tap button. Kept separate from /api/sound/preview so
+        the web UI's "Test Sound" button doesn't light up the display.
+        """
+        try:
+            data = req.json or {}
+            preset_id = data.get("preset_id", 1)
+            volume = data.get("volume", 50)
+            count = min(10, max(1, int(data.get("count", 1))))
+            show_alert = app.ctx.get("show_alert")
+            if show_alert:
+                show_alert()  # non-blocking: sets up the display, auto-restores later
+            await app.ctx["audio_player"].play_preset(preset_id, volume, count=count)
+            return _json_response({"status": "ok"})
+        except Exception as e:
+            print("api_call error:", e)
             return _json_response({"error": str(e)}, 500)
 
     @app.route("/api/sound/presets", methods=["GET"])
@@ -332,12 +366,26 @@ def register(app):
         return _json_response({"status": "rebooting"})
 
 
+def _add_time(scheduler, status):
+    """Add the device's local time ("HH:MM:SS") and weekday to a status dict."""
+    try:
+        _, _, _, weekday, hour, minute, second = scheduler.get_current_time()
+        day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        status["time"] = "{:02d}:{:02d}:{:02d}".format(hour, minute, second)
+        status["day"] = day_names[weekday]
+    except Exception:
+        status["time"] = "--:--:--"
+        status["day"] = ""
+    return status
+
+
 def _get_display_status(scheduler, config):
     """Build current display status for the UI."""
     try:
         _, _, _, weekday, hour, minute, _ = scheduler.get_current_time()
     except Exception:
-        return {"active": False, "message": config["message"]["text"]}
+        return {"active": False, "message": config["message"]["text"],
+                "color": config["message"].get("color") or {}}
 
     from scheduler.scheduler import is_time_in_range, is_day_match
 
@@ -347,6 +395,7 @@ def _get_display_status(scheduler, config):
     next_day = None
 
     active_message = config["message"]["text"]
+    active_color = config["message"].get("color") or {}
 
     for s in config.get("schedules", []):
         if not s.get("enabled"):
@@ -357,6 +406,8 @@ def _get_display_status(scheduler, config):
                 active_end = s["end_time"]
                 if s.get("message"):
                     active_message = s["message"]
+                if s.get("color"):
+                    active_color = s["color"]
                 break
 
     if not active:
@@ -387,6 +438,7 @@ def _get_display_status(scheduler, config):
     return {
         "active": active,
         "message": active_message if active else config["message"]["text"],
+        "color": active_color if active else (config["message"].get("color") or {}),
         "active_end": active_end,
         "next_start": next_start,
         "next_day": next_day,

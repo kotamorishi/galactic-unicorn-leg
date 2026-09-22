@@ -1,149 +1,111 @@
-"""Local preview server for Web UI design review."""
+"""Local preview server for the Web UI.
 
-import sys
-import os
-import json
-import datetime
+Runs the real microdot app and routes (src/web) on the PC, backed by the mock
+HAL, so pages, static assets and API calls behave like on the device.
+
+    python tools/preview_server.py            # http://localhost:8080
+    python tools/preview_server.py --port 9000
+
+Config files are written to a temp directory, never to src/.
+"""
+
+import argparse
 import asyncio
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import os
+import sys
+import tempfile
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
+sys.path.insert(0, SRC)
 
-from web.templates import render_main_page, render_settings_page, render_setup_page
-from audio.presets import get_preset_list
+from hal.mock import MockDisplay, MockAudio, MockNetwork, MockSystem  # noqa: E402
+from config import config_manager  # noqa: E402
+from display.renderer import DisplayRenderer  # noqa: E402
+from audio.player import AudioPlayer  # noqa: E402
+from scheduler.scheduler import Scheduler  # noqa: E402
+from wifi.manager import WiFiManager  # noqa: E402
+from web.server import create_app  # noqa: E402
 
-FAKE_CONFIG = {
+
+SAMPLE_CONFIG = {
     "message": {
-        "text": "Hello World! Welcome to Galactic Unicorn.",
+        "text": "Hello from Galactic Unicorn",
         "display_mode": "scroll",
         "scroll_speed": "medium",
-        "color": {"r": 255, "g": 200, "b": 0},
+        "color": {"r": 255, "g": 178, "b": 36},
         "font": "bitmap8",
     },
     "schedules": [
-        {
-            "id": 1, "enabled": True,
-            "start_time": "08:00", "end_time": "09:00",
-            "days": ["mon", "tue", "wed", "thu", "fri"],
-            "sound": {"enabled": True, "preset_id": 4, "volume": 50},
-        },
-        {
-            "id": 2, "enabled": False,
-            "start_time": "18:00", "end_time": "19:30",
-            "days": ["sat", "sun"],
-            "sound": {"enabled": False, "preset_id": 1, "volume": 50},
-        },
+        {"id": 1, "enabled": True, "start_time": "07:00", "end_time": "08:30",
+         "days": ["mon", "tue", "wed", "thu", "fri"], "message": "GOOD MORNING",
+         "color": {"r": 255, "g": 212, "b": 0},
+         "sound": {"enabled": True, "preset_id": 4, "volume": 50}},
+        {"id": 2, "enabled": True, "start_time": "07:30", "end_time": "08:00",
+         "days": ["tue", "fri"], "message": "Trash day!",
+         "color": {"r": 32, "g": 224, "b": 96},
+         "sound": {"enabled": True, "preset_id": 15, "volume": 75}},
+        {"id": 3, "enabled": True, "start_time": "18:00", "end_time": "19:00",
+         "days": [], "message": "Dinner time",
+         "color": {"r": 0, "g": 216, "b": 255},
+         "sound": {"enabled": False, "preset_id": 1, "volume": 50}},
+        {"id": 4, "enabled": False, "start_time": "22:00", "end_time": "06:00",
+         "days": ["fri", "sat"], "message": "", "color": {},
+         "sound": {"enabled": False, "preset_id": 1, "volume": 25}},
     ],
-    "system": {"brightness": 65, "timezone_offset": 9},
+    "system": {"brightness": 50, "brightness_offset": 10, "timezone_offset": 0},
 }
 
-def _now_time():
-    now = datetime.datetime.now()
-    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    return now.strftime("%H:%M:%S"), day_names[now.weekday()]
 
-FAKE_STATUS = {
-    "active": True,
-    "message": "Hello World! Welcome to Galactic Unicorn.",
-    "active_end": "09:00",
-    "next_start": None,
-    "next_day": None,
-}
+def build_app(workdir, sample=True):
+    """Create the real web app with mock hardware. chdir()s into workdir."""
+    os.chdir(workdir)
+    if sample and not os.path.exists(config_manager.APP_CONFIG_FILE):
+        config_manager.save_app_config(SAMPLE_CONFIG)
 
-FAKE_STATUS_OFF = {
-    "active": False,
-    "message": "Hello World! Welcome to Galactic Unicorn.",
-    "active_end": None,
-    "next_start": "08:00",
-    "next_day": "Mon",
-}
+    system = MockSystem()
+    display = MockDisplay()
+    display.init()
+    audio = MockAudio()
+    audio.init()
+    net = MockNetwork()
+    net.connect_sta("MyHomeWiFi", "x")
 
-FAKE_WIFI = {
-    "mode": "sta", "connected": True, "ip": "192.168.1.42",
-    "ssid": "MyHomeWiFi", "rssi": -45, "ntp_synced": True,
-}
+    sched = Scheduler(system)
+    cfg = config_manager.load_app_config()
+    sched.set_timezone_offset(cfg["system"]["timezone_offset"])
+    sched.set_schedules(cfg["schedules"])
+    offset = {"v": cfg["system"]["brightness_offset"]}
 
-FAKE_VERSION = {"version": "abc1234"}
+    ctx = {
+        "config_manager": config_manager,
+        "wifi_manager": WiFiManager(net, system),
+        "display_renderer": DisplayRenderer(display),
+        "audio_player": AudioPlayer(audio),
+        "scheduler": sched,
+        "system_hal": system,
+        "ota_updater": None,
+        "invalidate_msg_cache": lambda: None,
+        "set_brightness_offset": lambda v: offset.__setitem__("v", v),
+        "get_brightness_offset": lambda: offset["v"],
+        "update_auto_brightness": lambda: None,
+    }
+    return create_app(ctx)
 
-FAKE_NETWORKS = [
-    {"ssid": "MyHomeWiFi", "rssi": -35},
-    {"ssid": "Neighbor_5G", "rssi": -60},
-    {"ssid": "CoffeeShop_Free", "rssi": -72},
-]
 
-
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        path = self.path.split("?")[0]
-        presets = get_preset_list()
-
-        def _status_with_time(base):
-            s = dict(base)
-            s["time"], s["day"] = _now_time()
-            return s
-
-        pages = {
-            "/": lambda: render_main_page(FAKE_CONFIG, presets, _status_with_time(FAKE_STATUS)),
-            "/off": lambda: render_main_page(FAKE_CONFIG, presets, _status_with_time(FAKE_STATUS_OFF)),
-            "/settings": lambda: render_settings_page(FAKE_WIFI, FAKE_VERSION, 145000),
-            "/setup": lambda: render_setup_page(FAKE_NETWORKS),
-        }
-
-        if self.do_GET_api(path):
-            return
-
-        if path in pages:
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.end_headers()
-            gen = pages[path]()
-            # Collect async generator chunks
-            async def collect():
-                parts = []
-                async for chunk in gen:
-                    parts.append(chunk)
-                return "".join(parts)
-            html = asyncio.run(collect())
-            self.wfile.write(html.encode("utf-8"))
-        else:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b"Not Found")
-
-    def do_GET_api(self, path):
-        if path == "/api/status":
-            now = datetime.datetime.now()
-            day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            data = dict(FAKE_STATUS)
-            data["time"] = now.strftime("%H:%M:%S")
-            data["day"] = day_names[now.weekday()]
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps(data).encode())
-            return True
-        return False
-
-    def do_POST(self):
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        self.wfile.write(json.dumps({"status": "ok (preview)"}).encode())
-
-    def log_message(self, fmt, *args):
-        print(f"  {args[0]}")
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--empty", action="store_true", help="start without sample schedules")
+    args = ap.parse_args()
+    workdir = tempfile.mkdtemp(prefix="gu-preview-")
+    app = build_app(workdir, sample=not args.empty)
+    print("Preview: http://localhost:{}/  (settings: /settings, wifi setup: /setup)".format(args.port))
+    print("Config dir:", workdir)
+    try:
+        asyncio.run(app.start_server(host="0.0.0.0", port=args.port))
+    except KeyboardInterrupt:
+        print("\nStopped.")
 
 
 if __name__ == "__main__":
-    port = 8080
-    server = HTTPServer(("0.0.0.0", port), Handler)
-    print(f"Preview: http://localhost:{port}")
-    print(f"  /         Main (active)")
-    print(f"  /off      Main (inactive)")
-    print(f"  /settings Device settings")
-    print(f"  /setup    WiFi setup")
-    print("Ctrl+C to stop.")
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nStopped.")
+    main()
