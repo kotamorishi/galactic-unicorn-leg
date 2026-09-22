@@ -13,6 +13,10 @@ APP_CONFIG_FILE = "app_config.json"
 OTA_CONFIG_FILE = "ota_config.json"
 VERSION_FILE = "version.json"
 
+# 802.11 limits
+MAX_SSID_LEN = 32
+MAX_WIFI_PASSWORD_LEN = 63
+
 DEFAULT_APP_CONFIG = {
     "message": {
         "text": "Hello!",
@@ -197,23 +201,38 @@ def _validate_app_config(config):
 
 # --- Public API ---
 
+def _wifi_credentials(ssid, password):
+    """Coerce credentials to the shape network.WLAN.connect() accepts.
+
+    A non-string here is unrecoverable: it is written to flash, read back on
+    every boot, and passed to wlan.connect(), which raises before the web
+    server exists — so there is no way left to correct it.
+    """
+    if not isinstance(ssid, str):
+        return None
+    ssid = ssid[:MAX_SSID_LEN]
+    if not ssid:
+        return None
+    if not isinstance(password, str):
+        password = ""
+    return {"ssid": ssid, "password": password[:MAX_WIFI_PASSWORD_LEN]}
+
+
 def load_wifi_config():
     """Load WiFi config. Returns None if not configured."""
     data = _safe_read(WIFI_CONFIG_FILE)
-    if data is None:
-        return None
     if not isinstance(data, dict):
         return None
-    ssid = data.get("ssid", "")
-    password = data.get("password", "")
-    if not ssid:
-        return None
-    return {"ssid": ssid, "password": password}
+    return _wifi_credentials(data.get("ssid", ""), data.get("password", ""))
 
 
 def save_wifi_config(ssid, password):
-    """Save WiFi credentials."""
-    _safe_write(WIFI_CONFIG_FILE, {"ssid": ssid, "password": password})
+    """Save WiFi credentials. Returns False if they are unusable."""
+    creds = _wifi_credentials(ssid, password)
+    if creds is None:
+        return False
+    _safe_write(WIFI_CONFIG_FILE, creds)
+    return True
 
 
 def wifi_config_exists():

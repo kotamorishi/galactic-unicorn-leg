@@ -11,6 +11,7 @@ RECONNECT_DELAYS = [5, 10, 20, 40, 60]  # seconds, exponential backoff
 RECONNECT_PAUSE = 300  # 5 min pause after all retries exhausted
 CHECK_INTERVAL_S = 30
 NTP_SYNC_INTERVAL_S = 3600  # 1 hour
+NTP_RETRY_INTERVAL_S = 300  # while the clock has never been set
 
 
 class WiFiManager:
@@ -117,9 +118,12 @@ class WiFiManager:
         if self._mode != "sta":
             return
 
-        # Periodic NTP re-sync
-        if self._ntp_synced and self._net.is_connected():
-            if ticks_diff(current_ms, self._last_ntp_sync_ms) >= NTP_SYNC_INTERVAL_S * 1000:
+        # Periodic NTP sync. This also covers the never-synced case: gating on
+        # _ntp_synced left a device whose boot sync failed running the scheduler
+        # against an unset RTC forever.
+        if self._net.is_connected():
+            interval = NTP_SYNC_INTERVAL_S if self._ntp_synced else NTP_RETRY_INTERVAL_S
+            if ticks_diff(current_ms, self._last_ntp_sync_ms) >= interval * 1000:
                 self.sync_ntp()
                 self._last_ntp_sync_ms = current_ms
 

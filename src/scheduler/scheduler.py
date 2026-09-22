@@ -82,6 +82,10 @@ class Scheduler:
         self._schedules = schedules
         self._last_active_id = None
 
+    def has_schedules(self):
+        """True if any schedule is configured at all."""
+        return bool(self._schedules)
+
     def set_timezone_offset(self, offset):
         """Set timezone offset from UTC in hours."""
         self._timezone_offset = offset

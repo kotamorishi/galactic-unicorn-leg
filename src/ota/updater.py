@@ -7,11 +7,6 @@ Uses manifest.json in the repo to determine which files to update.
 import os
 
 try:
-    import ujson as json
-except ImportError:
-    import json
-
-try:
     import urequests as requests
 except ImportError:
     import requests
@@ -22,8 +17,21 @@ from config import config_manager
 GITHUB_API_BASE = "https://api.github.com/repos"
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
 
+# Streamed to flash in this many bytes at a time, so file size never bounds RAM
+DOWNLOAD_CHUNK = 512
+# Without this a mid-download WiFi drop blocks the only thread until power cycle
+HTTP_TIMEOUT_S = 20
+
 
 from lib.fs import file_exists as _file_exists
+
+
+def _remove(path):
+    """Delete a file, ignoring "it was not there"."""
+    try:
+        os.remove(path)
+    except OSError:
+        pass
 
 
 def _ensure_dir(path):
@@ -161,7 +169,7 @@ class OTAUpdater:
 
         resp = None
         try:
-            resp = requests.get(url)
+            resp = requests.get(url, timeout=HTTP_TIMEOUT_S)
             if resp.status_code != 200:
                 return None
             data = resp.json()
@@ -190,16 +198,10 @@ class OTAUpdater:
         )
 
         resp = None
+        tmp_path = file_path + ".tmp"
         try:
-            resp = requests.get(url)
+            resp = requests.get(url, timeout=HTTP_TIMEOUT_S)
             if resp.status_code != 200:
-                return False
-
-            # Bytes, not resp.text: the manifest carries binary files
-            # (display/font11.bin, display/cjk11.bin) that text mode corrupts.
-            content = resp.content
-
-            if not content or len(content) == 0:
                 return False
 
             # Ensure directory exists
@@ -207,10 +209,22 @@ class OTAUpdater:
             if dir_path:
                 _ensure_dir(dir_path)
 
-            # Safe write: tmp + rename
-            tmp_path = file_path + ".tmp"
+            # Stream to the temp file. resp.content would hold the whole file in
+            # RAM, which display/cjk11.bin (136KB) cannot do on a ~192KB heap
+            # with TLS buffers already allocated. Bytes, not text: the manifest
+            # carries binary fonts that decoding corrupts.
+            written = 0
             with open(tmp_path, "wb") as f:
-                f.write(content)
+                while True:
+                    chunk = resp.raw.read(DOWNLOAD_CHUNK)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    written += len(chunk)
+
+            if written == 0:
+                _remove(tmp_path)
+                return False
 
             try:
                 os.rename(tmp_path, file_path)
@@ -222,6 +236,8 @@ class OTAUpdater:
             return True
 
         except Exception:
+            # Never leave a half-written .tmp behind to be renamed by a later run
+            _remove(tmp_path)
             return False
         finally:
             if resp:

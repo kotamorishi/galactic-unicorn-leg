@@ -7,6 +7,32 @@ from unittest.mock import patch, MagicMock
 from ota.updater import OTAUpdater
 
 
+class _FakeBody:
+    """Stands in for requests' BodyStream: read(n) chunks, then b"" at EOF."""
+
+    def __init__(self, data):
+        self._data = data
+        self._pos = 0
+
+    def read(self, n=-1):
+        if n < 0:
+            n = len(self._data) - self._pos
+        chunk = self._data[self._pos:self._pos + n]
+        self._pos += len(chunk)
+        return chunk
+
+    def close(self):
+        pass
+
+
+def _fake_response(body, status=200):
+    resp = MagicMock()
+    resp.status_code = status
+    resp.raw = _FakeBody(body)
+    resp.close = MagicMock()
+    return resp
+
+
 class TestOTAVersionCheck:
 
     def test_should_check_at_configured_hour(self, mock_system):
@@ -99,10 +125,7 @@ class TestFileUpdate:
             "repo": "user/repo", "branch": "main", "app_path": "src/",
         }
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.content = b"print('hello')"
-        mock_response.close = MagicMock()
+        mock_response = _fake_response(b"print('hello')")
 
         import os
         original_cwd = os.getcwd()
@@ -127,10 +150,7 @@ class TestFileUpdate:
 
         # Bytes that a text-mode round trip does not survive
         blob = bytes(range(256)) + b"\r\n\x00\xff"
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.content = blob
-        mock_response.close = MagicMock()
+        mock_response = _fake_response(blob)
 
         import os
         original_cwd = os.getcwd()
@@ -150,10 +170,7 @@ class TestFileUpdate:
             "repo": "user/repo", "branch": "main", "app_path": "src/",
         }
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.content = b"content"
-        mock_response.close = MagicMock()
+        mock_response = _fake_response(b"content")
 
         import os
         original_cwd = os.getcwd()
@@ -174,10 +191,7 @@ class TestFileUpdate:
             "repo": "user/repo", "branch": "main", "app_path": "src/",
         }
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.content = b""
-        mock_response.close = MagicMock()
+        mock_response = _fake_response(b"")
 
         import os
         original_cwd = os.getcwd()
@@ -190,3 +204,79 @@ class TestFileUpdate:
             assert result is False
         finally:
             os.chdir(original_cwd)
+
+
+class TestDownloadStreaming:
+    """cjk11.bin is 136KB; buffering a whole file was impossible on a 192KB heap."""
+
+    def _updater(self, mock_system):
+        u = OTAUpdater(mock_system)
+        u._ota_config = {"repo": "user/repo", "branch": "main", "app_path": "src/"}
+        return u
+
+    def test_never_holds_the_whole_file_in_memory(self, mock_system, temp_dir):
+        from ota import updater as updater_mod
+
+        blob = bytes(i % 256 for i in range(136 * 1024))
+        resp = _fake_response(blob)
+        reads = []
+        raw_read = resp.raw.read
+
+        def counting_read(n=-1):
+            reads.append(n)
+            return raw_read(n)
+
+        resp.raw.read = counting_read
+
+        import os
+        cwd = os.getcwd()
+        os.chdir(str(temp_dir))
+        try:
+            with patch("ota.updater.requests") as mock_requests:
+                mock_requests.get.return_value = resp
+                assert self._updater(mock_system)._update_file("display/cjk11.bin") is True
+            with open("display/cjk11.bin", "rb") as f:
+                assert f.read() == blob
+        finally:
+            os.chdir(cwd)
+
+        assert reads, "file was not read in chunks"
+        assert max(reads) == updater_mod.DOWNLOAD_CHUNK
+        assert len(reads) > 200, "136KB should take many chunks, not one read"
+
+    def test_failed_download_leaves_no_tmp_file(self, mock_system, temp_dir):
+        resp = _fake_response(b"")
+
+        def boom(n=-1):
+            raise OSError("connection reset")
+
+        resp.raw.read = boom
+
+        import os
+        cwd = os.getcwd()
+        os.chdir(str(temp_dir))
+        try:
+            with patch("ota.updater.requests") as mock_requests:
+                mock_requests.get.return_value = resp
+                assert self._updater(mock_system)._update_file("main.py") is False
+            assert not os.path.exists("main.py.tmp"), "half-written .tmp left behind"
+            assert not os.path.exists("main.py"), "partial file renamed over the target"
+        finally:
+            os.chdir(cwd)
+
+    def test_requests_get_has_a_timeout(self, mock_system, temp_dir):
+        """No timeout means a mid-download WiFi drop hangs the only thread forever."""
+        from ota import updater as updater_mod
+
+        resp = _fake_response(b"x")
+        import os
+        cwd = os.getcwd()
+        os.chdir(str(temp_dir))
+        try:
+            with patch("ota.updater.requests") as mock_requests:
+                mock_requests.get.return_value = resp
+                self._updater(mock_system)._update_file("main.py")
+                _, kwargs = mock_requests.get.call_args
+                assert kwargs.get("timeout") == updater_mod.HTTP_TIMEOUT_S
+        finally:
+            os.chdir(cwd)

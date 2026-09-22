@@ -60,7 +60,11 @@ def asset_tag():
             except OSError:
                 parts.append("0")
         tag = "-".join(p for p in parts if p)
-        _asset_tag = "".join(c if c.isalnum() or c in "-." else "_" for c in tag)
+        # isalpha/isdigit, not isalnum: MicroPython's str has no isalnum, and
+        # this runs on the first yield of every page.
+        _asset_tag = "".join(
+            c if (c.isalpha() or c.isdigit() or c in "-.") else "_" for c in tag
+        )
     return _asset_tag
 
 

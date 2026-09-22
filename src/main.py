@@ -29,7 +29,17 @@ _ticks_diff = getattr(time, "ticks_diff", lambda e, s: e - s)
 # --- Hardware initialization ---
 # GalacticUnicorn must be initialized before WiFi (known constraint)
 
+# Decide PC-vs-device by probing for the Pimoroni module itself. Wrapping the
+# whole hal.real import in `except ImportError` meant a typo or a missing symbol
+# inside hal/real.py booted the device silently onto mocks: dark panel, no
+# sound, every API returning "ok".
 try:
+    import galactic  # noqa: F401
+    ON_DEVICE = True
+except ImportError:
+    ON_DEVICE = False
+
+if ON_DEVICE:
     from hal.real import RealDisplay, RealAudio, RealNetwork, RealButtons, RealSystem
     display_hal = RealDisplay()
     gu_instance = display_hal.init()
@@ -37,7 +47,7 @@ try:
     network_hal = RealNetwork()
     buttons_hal = RealButtons(gu_instance)
     system_hal = RealSystem()
-except ImportError:
+else:
     # Running on PC (testing) — use mocks
     from hal.mock import MockDisplay, MockAudio, MockNetwork, MockButtons, MockSystem
     display_hal = MockDisplay()
@@ -184,30 +194,70 @@ def on_schedule_start(schedule):
     sound = schedule.get("sound", {})
     if sound.get("enabled"):
         asyncio.create_task(
-            _play_sound_3x(
+            player.play_preset(
                 sound.get("preset_id", 1),
                 sound.get("volume", 50),
+                count=3,
             )
         )
 
 
-async def _play_sound_3x(preset_id, volume):
-    """Play a sound preset 3 times with 1-second pause between each."""
-    for i in range(3):
-        await player.play_preset(preset_id, volume)
-        if i < 2:
-            await asyncio.sleep(1)
-
-
 def on_no_schedule():
     """Called when no schedule is active. Don't turn off if manually activated."""
-    if not renderer._manual_active:
-        renderer.set_active(False)
+    if renderer._manual_active:
+        return
+    if not sched.has_schedules():
+        # Nothing is scheduled, so the configured message IS the display.
+        # Switching off here blanked the panel one tick after boot.
+        return
+    renderer.set_active(False)
 
 
 sched.on_schedule_active(on_schedule_active)
 sched.on_schedule_start(on_schedule_start)
 sched.on_no_schedule(on_no_schedule)
+
+
+# --- Temporary alert (e.g. "call" triggered from the ESP32 button) ---
+
+ALERT_TEXT = "BED ROOM!!"
+ALERT_COLOR = {"r": 255, "g": 40, "b": 40}
+ALERT_SECONDS = 10
+
+_alert_until = 0  # _ticks_ms deadline while an alert is showing; 0 = none
+
+
+_alert_prev_manual = False
+
+
+def show_alert(text=ALERT_TEXT, color=ALERT_COLOR, seconds=ALERT_SECONDS):
+    """Show a temporary scrolling alert message, then auto-restore normal display."""
+    global _alert_until, _alert_prev_manual
+    if not _alert_until:
+        # Only capture on the first alert; a re-trigger must not record the
+        # alert's own manual=True as the state to restore.
+        _alert_prev_manual = renderer._manual_active
+    renderer.clear_bitmap()
+    renderer.configure({
+        "text": text,
+        "display_mode": "scroll",
+        "scroll_speed": "fast",
+        "color": color,
+        "font": "bitmap8",
+    })
+    renderer.set_active(True, manual=True)
+    _alert_until = _ticks_ms() + seconds * 1000
+
+
+def _restore_after_alert():
+    """Return to the normal scheduled/configured display after an alert expires."""
+    renderer.configure(_get_msg_config())
+    # Restore what the user had before the alert borrowed the display, instead
+    # of clearing it — clearing left the panel dark whenever no schedule was
+    # active, including after every /api/call.
+    renderer.set_active(_alert_prev_manual or renderer._active,
+                        manual=_alert_prev_manual)
+    sched.check()
 
 
 # --- Auto brightness ---
@@ -271,6 +321,19 @@ async def display_loop():
         await asyncio.sleep_ms(interval)
 
 
+async def alert_loop():
+    """Restore the normal display once a temporary alert has expired."""
+    global _alert_until
+    while True:
+        if _alert_until and _ticks_diff(_ticks_ms(), _alert_until) >= 0:
+            _alert_until = 0
+            try:
+                _restore_after_alert()
+            except Exception as e:
+                print("alert restore error:", e)
+        await asyncio.sleep_ms(250)
+
+
 async def scheduler_loop():
     """Check schedules every minute. First check is immediate."""
     while True:
@@ -297,10 +360,18 @@ async def ota_check_loop():
         try:
             _, _, _, _, hour, _, _ = sched.get_current_time()
             if ota.should_check_now(hour):
+                was_active = renderer._active
+                was_manual = renderer._manual_active
                 renderer.set_active(False)
-                result = await ota.check_and_update()
-                if result.get("reboot_required"):
-                    system_hal.reset()
+                try:
+                    result = await ota.check_and_update()
+                    if result.get("reboot_required"):
+                        system_hal.reset()
+                finally:
+                    # "Already up to date", a failure, or a partial update all
+                    # return here. Without this the sign stayed dark until the
+                    # next reboot.
+                    renderer.set_active(was_active, manual=was_manual)
         except Exception as e:
             print("ota_check error:", e)
         # Check every 30 minutes (will only trigger at check_hour)
@@ -381,7 +452,17 @@ async def button_check_loop():
 
 async def main():
     """Main async entry point."""
-    sta_connected = boot_wifi()
+    try:
+        sta_connected = boot_wifi()
+    except Exception as e:
+        # A WiFi failure must not cost us the display, the web server or the
+        # schedule. Fall back to AP mode so the device stays configurable.
+        print("boot_wifi error:", e)
+        try:
+            _start_ap_with_display()
+        except Exception as e2:
+            print("ap fallback error:", e2)
+        sta_connected = False
 
     config = load_config(skip_display=not sta_connected)
 
@@ -395,17 +476,12 @@ async def main():
         "system_hal": system_hal,
         "ota_updater": ota if sta_connected else None,
         "invalidate_msg_cache": invalidate_msg_cache,
+        "show_alert": show_alert,
         "set_brightness_offset": set_brightness_offset,
         "get_brightness_offset": get_brightness_offset,
         "update_auto_brightness": _update_auto_brightness,
     }
     app = create_app(app_context)
-
-    # Determine server bind address
-    if sta_connected:
-        host = wifi_mgr.get_ip() or "0.0.0.0"
-    else:
-        host = wifi_mgr.get_ap_ip() or "192.168.4.1"
 
     # Initialize brightness offset from config
     set_brightness_offset(config.get("system", {}).get("brightness_offset", 0))
@@ -414,13 +490,15 @@ async def main():
     # Start all async tasks
     asyncio.create_task(display_loop())
     asyncio.create_task(button_check_loop())
+    asyncio.create_task(alert_loop())
 
     if sta_connected:
         asyncio.create_task(scheduler_loop())
         asyncio.create_task(wifi_monitor_loop())
         asyncio.create_task(ota_check_loop())
 
-        # If no schedules configured, keep display active by default
+        # With no schedules, on_no_schedule() leaves the display alone, so the
+        # configured message stays up from here on.
         if not config.get("schedules"):
             renderer.set_active(True)
     else:

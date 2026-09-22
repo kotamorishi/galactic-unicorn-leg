@@ -261,7 +261,10 @@ def register(app):
             if not ssid:
                 return _json_response({"error": "SSID required"}, 400)
 
-            config_manager.save_wifi_config(ssid, password)
+            # Reject before rebooting into credentials that cannot be used:
+            # wlan.connect() would raise before the web server exists.
+            if not config_manager.save_wifi_config(ssid, password):
+                return _json_response({"error": "Invalid SSID or password"}, 400)
 
             try:
                 import uasyncio as _asyncio

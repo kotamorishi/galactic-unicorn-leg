@@ -22,9 +22,16 @@ FONT_HEIGHT = {
 
 # Custom font data (loaded lazily to save RAM)
 def _get_font11():
-    """Load font11 bytearray on first use via binary file."""
-    from display.font11_data import get_font
-    return get_font()
+    """Load font11 bytearray on first use. Falls back if the file is missing.
+
+    A half-applied OTA can leave display/font11.bin absent; an unhandled OSError
+    here would take down boot rather than lose one font.
+    """
+    try:
+        from display.font11_data import get_font
+        return get_font()
+    except OSError:
+        return "bitmap8"
 
 
 class DisplayRenderer:
@@ -229,8 +236,16 @@ class DisplayRenderer:
         self._manual_active = True
 
     def clear_bitmap(self):
-        """Clear bitmap data and return to text mode."""
+        """Clear a bitmap pushed via /api/bitmap and return to text mode.
+
+        A bitmap composed from the message text (Japanese) is not "a bitmap the
+        user pushed" — dropping it would render the same text as tofu through
+        draw_text, so it is recomposed instead.
+        """
         self._bitmap_data = None
+        self._bitmap_bar_color = None
+        if not self._configure_cjk():
+            self._reset_scroll()
         self._frame_dirty = True
 
     def show_status(self, text):
@@ -254,8 +269,9 @@ class DisplayRenderer:
         For fixed/status/inactive modes, skips redraw if nothing changed.
         Call this at the interval returned by get_scroll_interval_ms().
         """
-        # Bitmap mode takes priority
-        if self._bitmap_data is not None and self._active:
+        # Status wins over everything: it is the only channel for "Updating...",
+        # boot progress and errors, and a bitmap must not hide it.
+        if self._bitmap_data is not None and self._active and not self._status_text:
             if self._effective_mode == "fixed" and not self._frame_dirty:
                 return
             self._display.clear()
