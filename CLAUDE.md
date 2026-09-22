@@ -127,7 +127,7 @@ galactic-unicorn-leg/
 ### Web UI
 - Pages are small HTML shells (`web/templates.py`) that embed their data as `window.D` JSON
 - Styling and behaviour live in `web/static/app.css` and `web/static/app.js`, served by `/static/<name>` (whitelist) with a long `Cache-Control` and a `?v=` cache-buster (OTA version + file sizes)
-- New static files must be added to `STATIC_FILES` in `templates.py` and to `manifest.json`; keep them plain ASCII (OTA writes them as text)
+- New static files must be added to `STATIC_FILES` in `templates.py` and to `manifest.json`, listed *before* the page that loads them (OTA downloads in manifest order and keeps going after a failure)
 - No external CSS/JS frameworks or CDNs — the setup page must work offline in AP mode
 - Use vanilla JS only — no frameworks
 - API endpoints return JSON; pages return minimal HTML
@@ -227,6 +227,6 @@ pytest tests/ -v
 3. **F-03 Audio Playback** — 20 synth presets, triggered on schedule start
 4. **F-04 WiFi Setup** — AP mode captive portal on first boot
 5. **F-05 Web Server** — microdot HTTP server for all settings
-6. **F-06 OTA Update** — Daily GitHub check, download `.py` files only. Display stops during update to free RAM for HTTPS.
+6. **F-06 OTA Update** — Daily GitHub check, downloads every file in `manifest.json` as bytes (`.py`, `.bin` fonts, `.css`/`.js`). Display stops during update to free RAM for HTTPS.
 
 See `docs/specification.md` for full details.

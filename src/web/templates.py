@@ -55,7 +55,8 @@ def asset_tag():
             pass
         for name in ("app.css", "app.js"):
             try:
-                parts.append(str(os.stat(STATIC_DIR + "/" + name)[6]))
+                st = os.stat(STATIC_DIR + "/" + name)
+                parts.append("{}.{}".format(st[6], st[8]))
             except OSError:
                 parts.append("0")
         tag = "-".join(p for p in parts if p)
@@ -75,10 +76,15 @@ def _head(title, page):
     ).format(t=title, v=v, p=page)
 
 
-def _data(obj):
-    """Embed data for app.js. '<' is escaped so text can't close the script."""
-    s = json.dumps(obj).replace("<", "\\u003c")
-    return "<script>window.D=" + s + "</script>"
+# Emitted around _json() as three separate chunks: with 20 schedules the blob is
+# the largest thing on the page, and concatenating it doubles the peak allocation.
+_D_OPEN = "<script>window.D="
+_D_CLOSE = "</script>"
+
+
+def _json(obj):
+    """JSON for app.js. '<' is escaped so text can't close the script tag."""
+    return json.dumps(obj).replace("<", "\\u003c")
 
 
 _TAIL = (
@@ -149,7 +155,8 @@ async def render_main_page(config, presets, status):
     yield _MAIN_MSG
     yield _MAIN_SCHED
     yield _MAIN_QUICK
-    yield _data({
+    yield _D_OPEN
+    yield _json({
         "msg": {
             "text": msg.get("text", ""),
             "display_mode": msg.get("display_mode", "scroll"),
@@ -162,6 +169,7 @@ async def render_main_page(config, presets, status):
         "status": status,
         "bo": system.get("brightness_offset", 0),
     })
+    yield _D_CLOSE
     yield _TAIL
 
 
@@ -195,7 +203,8 @@ async def render_settings_page(wifi_status, version, free_mem, system_config=Non
         '<div class="acts"><button class="btn ghost grow" id="ota">Check for updates</button></div></div>'
         '<div class="card danger-zone"><button class="btn ghost" id="reboot" style="color:var(--danger)">Reboot device</button></div>'
     )
-    yield _data({
+    yield _D_OPEN
+    yield _json({
         "wifi": {
             "connected": bool(wifi_status.get("connected")),
             "ssid": wifi_status.get("ssid") or "",
@@ -207,6 +216,7 @@ async def render_settings_page(wifi_status, version, free_mem, system_config=Non
         "free_kb": (free_mem // 1024) if free_mem else None,
         "tz": system_config.get("timezone_offset", 9),
     })
+    yield _D_CLOSE
     yield _TAIL
 
 
@@ -232,9 +242,8 @@ async def render_setup_page(networks):
             nets.append({"ssid": n["ssid"], "rssi": n.get("rssi")})
         except (KeyError, TypeError, AttributeError):
             pass
-    yield _data({"nets": nets})
+    yield _D_OPEN
+    yield _json({"nets": nets})
+    yield _D_CLOSE
     yield _TAIL
 
-
-def _esc(s):
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")

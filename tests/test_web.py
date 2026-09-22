@@ -136,3 +136,79 @@ class TestStatusApi:
         assert s["active"] is True
         assert s["message"] == "ALL DAY"
         assert s["color"] == {"r": 1, "g": 2, "b": 3}
+
+
+class TestPageStreaming:
+    """Guards the properties the page shell is supposed to have on 192KB of RAM."""
+
+    @staticmethod
+    def _chunks(config):
+        """Collect what render_main_page actually yields, without a socket."""
+        from web.templates import render_main_page
+
+        async def collect():
+            out = []
+            async for chunk in render_main_page(config, [], []):
+                out.append(chunk)
+            return out
+
+        return asyncio.new_event_loop().run_until_complete(collect())
+
+    def test_data_blob_is_its_own_chunk(self, config_in_temp):
+        """The JSON blob must not be concatenated with the script tags.
+
+        With 20 schedules it is the largest thing on the page; building
+        "<script>" + blob + "</script>" doubles the peak allocation.
+        """
+        from config import config_manager
+
+        config = config_manager.load_app_config()
+        config["schedules"] = [
+            {
+                "id": i,
+                "enabled": True,
+                "start_time": "08:00",
+                "end_time": "09:00",
+                "days": ["mon"],
+                "message": "schedule number {}".format(i),
+                "color": {},
+                "sound": {"enabled": False, "preset_id": 1, "volume": 50},
+            }
+            for i in range(20)
+        ]
+        chunks = self._chunks(config)
+        assert "<script>window.D=" in chunks
+        blob = max(chunks, key=len)
+        assert blob.startswith("{") and blob.endswith("}")
+        # Everything else stays small; only the data blob scales with config size
+        others = [c for c in chunks if c is not blob]
+        assert max(len(c) for c in others) < 3000
+
+    def test_japanese_text_survives_the_page(self, server):
+        """ujson on the device emits raw UTF-8; the '<' escape must not mangle it."""
+        text = "本日は18時まで営業中です"
+        httpx.post(server + "/api/message", json={"text": text})
+        r = httpx.get(server + "/")
+        assert _page_data(r.text)["msg"]["text"] == text
+
+
+class TestStaticAssets:
+    def test_cache_tag_changes_when_a_file_changes(self, config_in_temp, tmp_path):
+        """A same-size edit must still bust a 30-day cache, so size alone is not enough."""
+        import web.templates as templates
+
+        static = tmp_path / "static"
+        static.mkdir()
+        (static / "app.css").write_text("a{color:red}")
+        (static / "app.js").write_text("var a=1")
+        original_dir, original_tag = templates.STATIC_DIR, templates._asset_tag
+        try:
+            templates.STATIC_DIR = str(static)
+            templates._asset_tag = None
+            first = templates.asset_tag()
+            time.sleep(1.1)  # FAT mtime resolution
+            (static / "app.js").write_text("var a=2")  # same byte count
+            templates._asset_tag = None
+            assert templates.asset_tag() != first
+        finally:
+            templates.STATIC_DIR, templates._asset_tag = original_dir, original_tag

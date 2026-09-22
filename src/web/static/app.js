@@ -16,7 +16,7 @@ function clone(o) { return JSON.parse(JSON.stringify(o)); }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function mins(t) { var p = String(t).split(':'); return (+p[0]) * 60 + (+p[1]); }
 function inRange(c, a, b) { return a <= b ? (c >= a && c <= b) : (c >= a || c <= b); }
-function dur(a, b) { var d = b - a; if (d <= 0) d += 1440; var h = Math.floor(d / 60), m = d % 60; return ((h ? h + 'h ' : '') + (m ? m + 'm' : '')).trim() || '0m'; }
+function dur(a, b) { var d = b - a; if (d < 0) d += 1440; var h = Math.floor(d / 60), m = d % 60; return ((h ? h + 'h ' : '') + (m ? m + 'm' : '')).trim() || '0m'; }
 function sortDays(d) { return DAYS.filter(function (x) { return d.indexOf(x) >= 0; }); }
 function daysLabel(d) {
   var s = d.join(',');
@@ -427,7 +427,14 @@ function initSettings() {
 
   $('#ota').onclick = function () {
     var btn = this; btn.disabled = true; toast('Checking for updates' + ELL);
-    api('POST', '/api/ota/check').then(function (r) { toast(r.status || 'Done'); }).catch(fail).then(function () { btn.disabled = false; });
+    api('POST', '/api/ota/check').then(function (r) {
+      toast(r.status || 'Done');
+      // The running process still holds the old templates module, so the page
+      // and the freshly written static files are out of step until a restart.
+      if (r.reboot_required && confirm('Updated to ' + r.version + '. Reboot now to finish?')) {
+        api('POST', '/api/system/reboot').then(function () { toast('Rebooting' + ELL); }).catch(fail);
+      }
+    }).catch(fail).then(function () { btn.disabled = false; });
   };
   $('#reboot').onclick = function () {
     if (!confirm('Reboot the display? It will be offline for about 20 seconds.')) return;
