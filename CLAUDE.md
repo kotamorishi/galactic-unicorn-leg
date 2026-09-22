@@ -7,6 +7,7 @@ Pimoroni Galactic Unicorn (Raspberry Pi Pico W) を使用したLED表示デバ�
 
 - 仕様書: `docs/specification.md`
 - 調査資料: `docs/galactic-unicorn-feasibility-study.md`
+- 未決事項: `docs/backlog.md` — 監査で見つかったが、方針判断が要るため未修正の項目
 
 ## Hardware
 

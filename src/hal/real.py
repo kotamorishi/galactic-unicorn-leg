@@ -135,6 +135,12 @@ class RealAudio(AudioInterface):
         self._gu.stop_playing()
 
     def set_volume(self, volume):
+        # The interface documents 0.0-1.0 and MockAudio clamps, so an
+        # out-of-range value only ever misbehaved on real hardware.
+        if volume < 0.0:
+            volume = 0.0
+        elif volume > 1.0:
+            volume = 1.0
         self._gu.set_volume(volume)
 
     def get_volume(self):
@@ -156,6 +162,12 @@ class RealNetwork(NetworkInterface):
         deadline = time.time() + timeout_s
         while not self._wlan.isconnected():
             if time.time() > deadline:
+                # Leave the interface idle rather than endlessly associating:
+                # AP mode used to be brought up on top of a live STA attempt.
+                try:
+                    self._wlan.disconnect()
+                except OSError:
+                    pass
                 return False
             time.sleep(1)
         return True
@@ -209,8 +221,8 @@ class RealNetwork(NetworkInterface):
             was_active = wlan.active()
             if not was_active:
                 wlan.active(True)
-            import time
-            time.sleep(2)  # Allow time for scan after activation
+                import time
+                time.sleep(2)  # settle only when we just brought it up
             results = wlan.scan()
             if not was_active:
                 wlan.active(False)

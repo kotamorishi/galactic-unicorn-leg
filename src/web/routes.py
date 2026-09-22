@@ -17,8 +17,22 @@ def _json_response(data, status=200):
     return data, status, {"Content-Type": "application/json"}
 
 
-def _html(generator):
-    return generator, 200, {"Content-Type": "text/html"}
+async def _guard(generator, page):
+    """Stream a page, turning a mid-render failure into something visible.
+
+    Headers are already sent by the time microdot iterates the generator, so a
+    route-level try/except cannot help: the browser just gets a truncated body.
+    """
+    try:
+        async for chunk in generator:
+            yield chunk
+    except Exception as e:
+        print("render error ({}):".format(page), e)
+        yield "<pre>render error: {}</pre>".format(e)
+
+
+def _html(generator, page="page"):
+    return _guard(generator, page), 200, {"Content-Type": "text/html"}
 
 
 def _sound_args(data):
@@ -49,7 +63,7 @@ def register(app):
             scheduler = app.ctx["scheduler"]
             status = _get_display_status(scheduler, config)
             _add_time(scheduler, status)
-            return _html(render_main_page(config, presets, status))
+            return _html(render_main_page(config, presets, status), "main")
 
         except Exception as e:
             print("main_page error:", e)
@@ -62,7 +76,9 @@ def register(app):
         config = config_manager.load_app_config()
         version = config_manager.load_version()
         free_mem = app.ctx["system_hal"].get_free_memory()
-        return _html(render_settings_page(wifi_status, version, free_mem, config["system"]))
+        return _html(
+            render_settings_page(wifi_status, version, free_mem, config["system"]),
+            "settings")
 
     @app.route("/setup")
     async def setup_page(req):
@@ -70,7 +86,7 @@ def register(app):
             networks = app.ctx["wifi_manager"].scan_networks()
         except Exception:
             networks = []
-        return _html(render_setup_page(networks))
+        return _html(render_setup_page(networks), "setup")
 
     # --- Static assets (whitelisted; never build paths from user input) ---
 
@@ -340,7 +356,7 @@ def register(app):
 
             renderer = app.ctx["display_renderer"]
             renderer.set_bitmap(
-                width, height, fmt, bytearray(raw),
+                width, height, fmt, raw,
                 (color.get("r", 255), color.get("g", 255), color.get("b", 255)),
                 (bg.get("r", 0), bg.get("g", 0), bg.get("b", 0)),
                 mode, speed,
@@ -433,26 +449,34 @@ def _get_display_status(scheduler, config):
     if not active:
         # Find next upcoming schedule
         day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        _best = 1441
         for s in config.get("schedules", []):
             if not s.get("enabled"):
                 continue
             if is_day_match(weekday, s.get("days", [])):
                 sh, sm = [int(x) for x in s["start_time"].split(":")]
-                if sh * 60 + sm > hour * 60 + minute:
+                start = sh * 60 + sm
+                # Soonest, not first in list order
+                if start > hour * 60 + minute and (
+                    next_start is None or start < _best
+                ):
+                    _best = start
                     next_start = s["start_time"]
                     next_day = day_names[weekday]
-                    break
         if next_start is None:
             for offset in range(1, 8):
                 check_day = (weekday + offset) % 7
+                best = None
                 for s in config.get("schedules", []):
                     if not s.get("enabled"):
                         continue
                     if is_day_match(check_day, s.get("days", [])):
-                        next_start = s["start_time"]
-                        next_day = day_names[check_day]
-                        break
-                if next_start:
+                        # Earliest on that day, not first in list order
+                        if best is None or s["start_time"] < best:
+                            best = s["start_time"]
+                if best:
+                    next_start = best
+                    next_day = day_names[check_day]
                     break
 
     return {

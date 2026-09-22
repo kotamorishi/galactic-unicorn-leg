@@ -190,9 +190,10 @@ Single-page design with 4 sections:
 | POST | `/api/message` | `{text, display_mode, scroll_speed, color:{r,g,b}, font}` | validated message | Set global message + activate display |
 | GET | `/api/schedules` | — | schedule array | Get all schedules |
 | POST | `/api/schedules` | schedule array | validated schedule array | Set all schedules |
-| POST | `/api/sound/preview` | `{preset_id, volume}` | `{status:"ok"}` | Preview a sound preset |
+| POST | `/api/sound/preview` | `{preset_id, volume, count}` | `{status:"ok"}` | Preview a sound preset (`count` 1-10 repeats) |
+| POST | `/api/call` | `{preset_id, volume, count}` | `{status:"ok"}` | Ring the sound *and* flash an alert on the LED |
 | GET | `/api/sound/presets` | — | `[{id, name, category}]` | List all presets |
-| POST | `/api/system/brightness` | `{brightness}` | `{brightness}` | Set LED brightness (0-100) |
+| POST | `/api/system/brightness` | `{brightness_offset}` | `{brightness_offset}` | Adjust auto-brightness by -50..+50 |
 | POST | `/api/system/volume` | `{volume}` | `{volume}` | Set master volume (0-100) |
 | POST | `/api/system/timezone` | `{timezone_offset}` | `{timezone_offset}` | Set timezone (-12 to +14) |
 | GET | `/api/wifi/scan` | — | `[{ssid, rssi}]` | Scan WiFi networks |
@@ -206,7 +207,7 @@ GitHubリポジトリの最新コードを定期的にチェックし、`.py` �
 
 | Item | Spec |
 |------|------|
-| Target | `.py` files listed in `manifest.json` |
+| Target | Every file listed in `manifest.json` — `.py`, the `.bin` fonts and the `.css`/`.js` assets |
 | Not updated | Firmware (UF2), config files (`wifi_config.json`, `app_config.json`) |
 | Check frequency | Daily at configured hour (default 3:00 AM) |
 | Check interval | Every 30 minutes (triggers only at configured hour) |
@@ -276,10 +277,10 @@ GitHubリポジトリの最新コードを定期的にチェックし、`.py` �
 | A (short press) | Show IP address on LED for 5 seconds |
 | B (short press) | Show configured WiFi SSID on LED for 5 seconds |
 | A + D (hold 5 seconds) | Delete WiFi config and reboot into AP setup mode |
-| C | Not used |
+| C | Show ambient light level on LED for a few seconds |
 | Sleep | Not used |
 | Volume Up/Down | Not used (volume controlled via Web UI) |
-| Brightness Up/Down | Not used (brightness controlled via Web UI) |
+| Brightness Up/Down | Adjust the auto-brightness offset; the value is saved to flash |
 
 ---
 
@@ -385,7 +386,9 @@ All config writes use **atomic tmp+rename** pattern (`file.tmp` → `os.rename()
 | `schedule.message` | String, max 128 chars |
 | `schedule.sound.preset_id` | Integer 1-20, clamped |
 | `schedule.sound.volume` | Integer 0-100, clamped |
-| `system.brightness` | Integer 0-100, clamped |
+| `system.brightness` | Unused legacy key, still clamped 0-100 |
+| `system.brightness_offset` | Integer -50 to +50, clamped — this is the live one |
+| `message.bg_color` / `message.border` / `message.border_color` | Validated with the message |
 | `system.timezone_offset` | Integer -12 to +14, clamped |
 | Corrupt/missing config | Falls back to defaults, never crashes |
 
@@ -442,7 +445,9 @@ src/
 
 ### Test Suite
 
-101 tests running on PC (CPython + pytest). No device required.
+PC test suite (CPython + pytest). No device required. Run `pytest tests/ -v`;
+`httpx` is needed for the web tests and `mpy-cross` for the MicroPython syntax check,
+both skipped if absent.
 
 | Test File | Count | Coverage |
 |-----------|-------|----------|

@@ -565,8 +565,10 @@ setting is involved — send Japanese text to `POST /api/message` and it renders
 - Coverage: 7,170 glyphs, 6,356 kanji (JIS 第1・第2水準), kana, halfwidth forms
 - Advance: **8px** for kanji and kana, **4px** for halfwidth — so about
   **6 kanji are visible at once** on the 53px panel. Use `scroll` for anything longer
-- The `font` setting is ignored for these messages; colour, background, border,
-  mode and speed all still apply
+- The `font` setting is ignored for these messages; colour, background, mode
+  and speed still apply. `border` does **not** — the bitmap path draws no border
+- The 10 extended glyphs (Æ Ø Å æ ø å Þ þ © °) belong to the 105-slot fonts. A
+  message containing one is routed to the CJK path, where they render blank
 - Characters the font lacks render as blank, not as a crash
 
 Composition runs once when the message changes (a binary search per character
@@ -597,8 +599,10 @@ The device receives raw pixel data — it does not need to know about character 
 ### Encoding
 
 - All API requests/responses use **UTF-8** JSON encoding
-- Text in `POST /api/message` is UTF-8 but only ASCII characters will render correctly on the LED (unsupported characters display as blank or garbled)
-- For non-ASCII text, use `POST /api/bitmap` with pre-rendered pixel data
+- Text in `POST /api/message` is UTF-8. Anything above U+007E is composed from
+  the CJK glyph file automatically — see *Japanese* above. No client change needed.
+- `POST /api/bitmap` remains the escape hatch for anything the glyph file lacks
+  (emoji, other scripts) or for arbitrary graphics
 
 ---
 

@@ -24,6 +24,7 @@ except ImportError:
 # Resolve tick functions once at load time (avoids hasattr per call)
 _ticks_ms = getattr(time, "ticks_ms", lambda: int(time.time() * 1000))
 _ticks_diff = getattr(time, "ticks_diff", lambda e, s: e - s)
+_ticks_add = getattr(time, "ticks_add", lambda t, d: t + d)
 
 
 # --- Hardware initialization ---
@@ -168,23 +169,37 @@ def invalidate_msg_cache():
     _cached_msg_config = None
 
 
+_applied_sched = None  # signature of the schedule currently on screen
+
+
+def _sched_signature(schedule):
+    c = schedule.get("color") or {}
+    return (
+        schedule.get("id"),
+        schedule.get("message", ""),
+        c.get("r"), c.get("g"), c.get("b"),
+    )
+
+
 def on_schedule_active(schedule):
-    """Called when a schedule is currently active."""
-    # Schedule takes over — clear bitmap and manual mode
-    renderer.clear_bitmap()
+    """Called on every tick while a schedule is active."""
+    global _applied_sched
+    if _alert_until:
+        # An alert owns the display; the tick used to overwrite it mid-flight.
+        return
     renderer._manual_active = False
-    # Update message text and color from schedule if set
-    msg_text = schedule.get("message", "")
-    sched_color = schedule.get("color", {})
-    cur_color = renderer._color
-    needs_update = (msg_text and msg_text != renderer._text) or \
-                   (sched_color and (sched_color.get("r", 0), sched_color.get("g", 0), sched_color.get("b", 0)) != cur_color)
-    if needs_update:
+    sig = _sched_signature(schedule)
+    if sig != _applied_sched:
+        _applied_sched = sig
+        # Reconfigure unconditionally from the base config plus this
+        # schedule's overrides. Patching only the changed fields left the
+        # previous schedule's text and colour, and a bitmap's scroll mode and
+        # speed, applied to the new one.
         msg_cfg = dict(_get_msg_config())
-        if msg_text:
-            msg_cfg["text"] = msg_text
-        if sched_color:
-            msg_cfg["color"] = sched_color
+        if schedule.get("message"):
+            msg_cfg["text"] = schedule["message"]
+        if schedule.get("color"):
+            msg_cfg["color"] = schedule["color"]
         renderer.configure(msg_cfg)
     renderer.set_active(True)
 
@@ -204,6 +219,8 @@ def on_schedule_start(schedule):
 
 def on_no_schedule():
     """Called when no schedule is active. Don't turn off if manually activated."""
+    global _applied_sched
+    _applied_sched = None
     if renderer._manual_active:
         return
     if not sched.has_schedules():
@@ -246,7 +263,8 @@ def show_alert(text=ALERT_TEXT, color=ALERT_COLOR, seconds=ALERT_SECONDS):
         "font": "bitmap8",
     })
     renderer.set_active(True, manual=True)
-    _alert_until = _ticks_ms() + seconds * 1000
+    # ticks_add, not +: ticks_ms wraps at 2**30 (~12.4 days) on MicroPython
+    _alert_until = _ticks_add(_ticks_ms(), seconds * 1000)
 
 
 def _restore_after_alert():
@@ -341,7 +359,13 @@ async def scheduler_loop():
             sched.check()
         except Exception as e:
             print("scheduler_loop error:", e)
-        await asyncio.sleep(60)
+        # Sleep to the next minute boundary. A flat 60s drifts by however long
+        # check() took, and a one-minute window eventually falls between ticks.
+        try:
+            secs = sched.get_current_time()[6]
+        except Exception:
+            secs = 0
+        await asyncio.sleep(max(1, 60 - secs))
 
 
 async def wifi_monitor_loop():

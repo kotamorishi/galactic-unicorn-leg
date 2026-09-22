@@ -212,3 +212,17 @@ class TestStaticAssets:
             assert templates.asset_tag() != first
         finally:
             templates.STATIC_DIR, templates._asset_tag = original_dir, original_tag
+
+
+class TestRenderFailureIsVisible:
+    def test_a_broken_page_generator_says_so(self, server, monkeypatch):
+        """Headers are already sent, so the route try/except cannot help."""
+        import web.templates as templates
+
+        def boom(*a, **k):
+            raise RuntimeError("kaboom")
+
+        monkeypatch.setattr(templates, "asset_tag", boom)
+        r = httpx.get(server + "/")
+        assert "render error" in r.text
+        assert "kaboom" in r.text
